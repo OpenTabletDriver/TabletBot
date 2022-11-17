@@ -1,3 +1,5 @@
+#![feature(let_chains)]
+
 pub(crate) mod structures;
 pub(crate) mod commands;
 pub(crate) mod events;
@@ -11,14 +13,14 @@ use serenity::async_trait;
 use serenity::framework::StandardFramework;
 use serenity::http::Http;
 use serenity::model::application::interaction::*;
-use serenity::model::prelude::{Message, Ready, UserId};
+use serenity::model::prelude::{Message, Ready, UserId, Reaction};
 use serenity::prelude::*;
 use crate::structures::*;
 
 #[tokio::main]
 async fn main() {
-  let discord_token = env::var("DISCORD_TOKEN").expect("Expected discord api token");
-  let github_token = env::var("GITHUB_TOKEN").expect("Expected github api token");
+  let discord_token = env::var("DISCORD_TOKEN").expect("Export the 'DISCORD_TOKEN' environment variable");
+  let github_token = env::var("GITHUB_TOKEN").expect("Export the 'GITHUB_TOKEN' environment variable");
 
   let http = Http::new(&discord_token);
 
@@ -41,6 +43,7 @@ async fn main() {
 
   let intents = GatewayIntents::GUILD_MESSAGES
     | GatewayIntents::DIRECT_MESSAGES
+    | GatewayIntents::GUILD_MESSAGE_REACTIONS
     | GatewayIntents::MESSAGE_CONTENT;
 
   let mut client = Client::builder(&discord_token, intents)
@@ -55,14 +58,10 @@ async fn main() {
   octocrab::initialise(octo_builder)
     .expect("Failed to build github client");
 
-  let pwd = env::current_dir().unwrap().to_string_lossy().to_string();
-  let data_root = env::var("TABLETBOT_DATA").unwrap_or(pwd);
-  let container = Container::new(&data_root);
-
   {
     let mut data = client.data.write().await;
-    data.insert::<Container>(container);
     data.insert::<ShardManagerContainer>(client.shard_manager.clone());
+    data.insert::<State>(State::read().unwrap_or(State::default()));
   }
 
   let shard_manager = client.shard_manager.clone();
@@ -99,6 +98,19 @@ impl EventHandler for Handler {
       },
       Err(e) => println!("Failed to register global commands: {}", e.to_string())
     }
+
+    if let Ok(guilds) = ctx.http.get_guilds(None, None).await {
+      for guild in guilds {
+        if let Ok(app_commands) = guild.id.get_application_commands(&ctx).await {
+          for command in app_commands {
+            guild.id.delete_application_command(&ctx, command.id).await
+              .expect(&format!("Failed to unregister guild command: {}", command.name));
+
+            println!("Unregistered guild command {}", command.name);
+          }
+        }
+      }
+    }
   }
 
   async fn message(&self, ctx: Context, msg: Message) {
@@ -114,6 +126,14 @@ impl EventHandler for Handler {
     println!("[#{}/{}]: {}", channel_name, user_name, msg.content);
 
     events::message(&ctx, &msg).await;
+  }
+
+  async fn reaction_add(&self, ctx: Context, added_reaction: Reaction) {
+    events::reaction_add(&ctx, &added_reaction).await;
+  }
+
+  async fn reaction_remove(&self, ctx: Context, removed_reaction: Reaction) {
+    events::reaction_remove(&ctx, &removed_reaction).await;
   }
 
   async fn interaction_create(&self, ctx: Context, interaction: Interaction) {

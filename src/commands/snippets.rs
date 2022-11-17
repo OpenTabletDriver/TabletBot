@@ -3,28 +3,11 @@ use serenity::builder::{CreateApplicationCommand, CreateApplicationCommandOption
 use serenity::model::prelude::command::CommandOptionType;
 use serenity::model::prelude::interaction::application_command::{ApplicationCommandInteraction, CommandDataOptionValue};
 use serenity::prelude::Context;
-use serenity::utils::Colour;
-use crate::commands::types::*;
-use crate::structures::{Container, Snippet};
+use crate::commands::{get_option_value, GenOpts, SlashCommand};
+use crate::structures::{Snippet, State};
 
-use super::register;
-
-fn get_str_opt(command: &ApplicationCommandInteraction, slice: usize) -> Option<String> {
-  let opt = command.data.options.get(slice)
-    .expect(&format!("Expected argument at {}", slice))
-    .resolved
-    .as_ref()
-    .expect(&format!("Expected string for argument value at {}", slice));
-
-  if let CommandDataOptionValue::String(s) = opt {
-    Some(s.clone())
-  } else {
-    None
-  }
-}
-
-async fn followup_snippet(ctx: &Context, container: &Container, command: &ApplicationCommandInteraction, snippet_name: String) {
-  let snippet = container.state.snippets
+async fn followup_snippet(ctx: &Context, state: &State, command: &ApplicationCommandInteraction, snippet_name: String) {
+  let snippet = state.snippets
     .iter()
     .find(|s| snippet_name.eq(&s.id));
 
@@ -33,7 +16,7 @@ async fn followup_snippet(ctx: &Context, container: &Container, command: &Applic
       f.embed(|e| e
         .title(&snippet.title)
         .description(&snippet.content)
-        .color(OK_COLOR)
+        .color(crate::commands::OK_COLOR)
       )
     ).await.expect("Failed to respond with snippet embed");
   } else {
@@ -41,29 +24,22 @@ async fn followup_snippet(ctx: &Context, container: &Container, command: &Applic
       f.embed(|e| e
         .title("Error")
         .description(format!("Failed to get embed for snippet '{}'", snippet_name))
-        .color(ERROR_COLOR)
+        .color(crate::commands::ERROR_COLOR)
       )
     ).await.expect("Failed to respond with error embed");
   }
 }
 
-trait SnippetOpts {
-  fn gen_opts(&mut self, container: &Container) -> &mut Self;
-}
-
-impl SnippetOpts for CreateApplicationCommandOption {
-  fn gen_opts(&mut self, container: &Container) -> &mut Self {
-    for snippet in container.state.snippets[..25].iter() {
+impl GenOpts for CreateApplicationCommandOption {
+  fn gen_opts(&mut self, state: &State) -> &mut Self {
+    for snippet in state.snippets[..25].iter() {
       let name = format!("{}: {}", snippet.id, snippet.title);
-      self.add_string_choice(name, snippet.id.clone());
+      self.add_string_choice(name, snippet.id.to_string());
     }
 
     self
   }
 }
-
-const OK_COLOR: Colour = Colour(0x2ecc71);
-const ERROR_COLOR: Colour = Colour(0xe74c3c);
 
 pub const SNIPPET_NAME: &str = "snippet";
 pub struct SnippetCommand;
@@ -81,8 +57,8 @@ pub struct ExportSnippetCommand;
 impl SlashCommand for SnippetCommand {
   async fn register(ctx: &Context) -> CreateApplicationCommand {
     let data = ctx.data.read().await;
-    let container = data.get::<Container>()
-      .expect("Failed to get main container");
+    let state = data.get::<State>()
+      .expect("Failed to get state");
 
     CreateApplicationCommand::default()
       .name(SNIPPET_NAME)
@@ -92,20 +68,22 @@ impl SlashCommand for SnippetCommand {
         .description("The name of the snippet")
         .kind(CommandOptionType::String)
         .required(true)
-        .gen_opts(container)
+        .gen_opts(state)
       )
       .to_owned()
   }
 
   async fn invoke(ctx: &Context, command: &ApplicationCommandInteraction) {
-    let id = get_str_opt(command, 0).expect("Expected id parameter");
+    let id = get_option_value(command, 0, "id");
 
-    command.defer(&ctx.http).await.expect("Failed to defer interaction");
+    if let CommandDataOptionValue::String(id) = id {
+      command.defer(&ctx.http).await.expect("Failed to defer interaction");
 
-    let data = ctx.data.read().await;
-    let container = data.get::<Container>()
-      .expect("Failed to get main container");
-    followup_snippet(ctx, container, command, id).await;
+      let data = ctx.data.read().await;
+      let state = data.get::<State>()
+        .expect("Failed to get state");
+      followup_snippet(ctx, state, command, id).await;
+    }
   }
 }
 
@@ -137,43 +115,51 @@ impl SlashCommand for SetSnippetCommand {
   }
 
   async fn invoke(ctx: &Context, command: &ApplicationCommandInteraction) {
-    let id = get_str_opt(command, 0).expect("Expected id parameter");
-    let title = get_str_opt(command, 1).expect("Expected title parameter");
-    let content = get_str_opt(command, 2).expect("Expected content parameter").replace(r#"\n"#, "\n");
+    let id = get_option_value(command, 0, "id");
+    let title = get_option_value(command, 1, "title");
+    let content = get_option_value(command, 2, "content");
 
     command.defer(&ctx.http).await.expect("Failed to defer interaction");
 
+    match (id, title, content)
     {
-      let mut data = ctx.data.write().await;
-      let container = data.get_mut::<Container>().expect("Failed to get main container");
-      let old_snippet = container.state.snippets.iter_mut()
-        .find(|s| s.id == id);
+      (
+        CommandDataOptionValue::String(id),
+        CommandDataOptionValue::String(title),
+        CommandDataOptionValue::String(content),
+      ) => {
+        let mut data = ctx.data.write().await;
+        let state = data.get_mut::<State>().expect("Failed to get state");
+        let old_snippet = state.snippets.iter_mut()
+          .find(|s| s.id == id);
 
-      match old_snippet {
-        Some(o) => {
-          o.title = title;
-          o.content = content;
-        },
-        None => container.state.snippets.push(Snippet {
-          id: id.clone(),
-          title,
-          content
-        })
-      }
+        match old_snippet {
+          Some(o) => {
+            o.title = title;
+            o.content = content;
+          },
+          None => state.snippets.push(Snippet {
+            id: id.clone(),
+            title,
+            content
+          })
+        }
 
-      container.write();
+        state.write();
 
-      if let Err(err) = register(ctx).await {
-        command.create_followup_message(&ctx.http, |f| f
-          .embed(|e| e
-            .title("Error")
-            .description(format!("{}", err))
-            .colour(ERROR_COLOR)
-          )
-        ).await.expect("Failed to reply with error");
-      } else {
-        followup_snippet(ctx, container, command, id).await;
-      }
+        if let Err(err) = crate::commands::register(ctx).await {
+          command.create_followup_message(&ctx.http, |f| f
+            .embed(|e| e
+              .title("Error")
+              .description(format!("{}", err))
+              .colour(crate::commands::ERROR_COLOR)
+            )
+          ).await.expect("Failed to reply with error");
+        } else {
+          followup_snippet(ctx, state, command, id).await;
+        }
+      },
+      _ => ()
     }
   }
 }
@@ -182,7 +168,7 @@ impl SlashCommand for SetSnippetCommand {
 impl SlashCommand for RemoveSnippetCommand {
   async fn register(ctx: &Context) -> CreateApplicationCommand {
     let data = ctx.data.read().await;
-    let container = data.get::<Container>().expect("Failed to get main container");
+    let state = data.get::<State>().expect("Failed to get state");
 
     CreateApplicationCommand::default()
       .name(REMOVE_SNIPPET_NAME)
@@ -192,49 +178,55 @@ impl SlashCommand for RemoveSnippetCommand {
         .description("The snippet's ID")
         .kind(CommandOptionType::String)
         .required(true)
-        .gen_opts(container)
+        .gen_opts(state)
       )
       .to_owned()
   }
 
   async fn invoke(ctx: &Context, command: &ApplicationCommandInteraction) {
-    let id = get_str_opt(command, 0).expect("Expected id parameter");
+    let id = get_option_value(command, 0, "id");
 
-    command.defer(&ctx.http).await.expect("Failed to defer interaction");
+    if let CommandDataOptionValue::String(id) = id {
+      command.defer(&ctx.http).await.expect("Failed to defer interaction");
 
-    let mut data = ctx.data.write().await;
-    let container = data.get_mut::<Container>().expect("Failed to get main container");
+      let mut data = ctx.data.write().await;
+      let state = data.get_mut::<State>().expect("Failed to get state");
 
-    let index = container.state.snippets.iter().position(|s| s.id == id);
+      let index = state.snippets.iter().position(|s| s.id == id);
 
-    match index.clone() {
-      Some(i) => {
-        container.state.snippets.remove(i);
+      match index.clone() {
+        Some(i) => {
+          state.snippets.remove(i);
 
-        command.create_followup_message(&ctx.http, |r| r
-          .embed(|e| e
-            .title("Removed snippet")
-            .description(format!("Successfully removed the '{}' snippet", id))
-            .color(OK_COLOR)
-          )
-        ).await.expect("Failed to follow up interaction");
-      },
-      None => {
-        command.create_followup_message(&ctx.http, |r| r
-          .embed(|e| e
-            .title("Error")
-            .description(&format!("Failed to find a snippet '{}'", id))
-            .color(ERROR_COLOR)
-          )
-        ).await.expect("Failed to follow up interaction");
-      }
-    };
+          command.create_followup_message(&ctx.http, |r| r
+            .embed(|e| e
+              .title("Removed snippet")
+              .description(format!("Successfully removed the '{}' snippet", id))
+              .color(crate::commands::OK_COLOR)
+            )
+          ).await.expect("Failed to follow up interaction");
+        },
+        None => {
+          command.create_followup_message(&ctx.http, |r| r
+            .embed(|e| e
+              .title("Error")
+              .description(&format!("Failed to find a snippet '{}'", id))
+              .color(crate::commands::ERROR_COLOR)
+            )
+          ).await.expect("Failed to follow up interaction");
+        }
+      };
+    }
   }
 }
 
 #[async_trait]
 impl SlashCommand for ExportSnippetCommand {
-  async fn register(_: &Context) -> CreateApplicationCommand {
+  async fn register(ctx: &Context) -> CreateApplicationCommand {
+    let data = ctx.data.read().await;
+    let state = data.get::<State>()
+      .expect("Failed to get state");
+
     CreateApplicationCommand::default()
       .name(EXPORT_SNIPPET_NAME)
       .description("Exports a snippet for editing")
@@ -243,38 +235,41 @@ impl SlashCommand for ExportSnippetCommand {
         .description("The snippet's ID")
         .kind(CommandOptionType::String)
         .required(true)
+        .gen_opts(state)
       )
       .to_owned()
   }
 
   async fn invoke(ctx: &Context, command: &ApplicationCommandInteraction) {
-    let id = get_str_opt(command, 0).expect("Expected id parameter");
+    let id = get_option_value(command, 0, "id");
 
-    command.defer(&ctx.http).await.expect("Failed to defer interaction");
+    if let CommandDataOptionValue::String(id) = id {
+      command.defer(&ctx.http).await.expect("Failed to defer interaction");
 
-    let data = ctx.data.read().await;
-    let container = data.get::<Container>().expect("Failed to get main container");
+      let data = ctx.data.read().await;
+      let state = data.get::<State>().expect("Failed to get state");
 
-    let snippet = container.state.snippets
-      .iter()
-      .find(|s| id.eq(&s.id));
+      let snippet = state.snippets
+        .iter()
+        .find(|s| id.eq(&s.id));
 
-    if let Some(s) = snippet {
-      command.create_followup_message(&ctx.http, |f| f
-        .content(format!("```\n{}\n```", s.content.replace(r#"\n"#, "\n")))
-        .embed(|e| e
-          .title(&s.title)
-          .description(&s.content)
-          .color(OK_COLOR)
-        )
-      ).await.expect("Failed to reply with snippet contents");
-    } else {
-      command.create_followup_message(&ctx.http, |f| f
-        .embed(|e| e
-          .title("Error")
-          .description(format!("Failed to find snippet '{}'", id))
-        )
-      ).await.expect("Failed to reply with error embed");
+      if let Some(s) = snippet {
+        command.create_followup_message(&ctx.http, |f| f
+          .content(format!("```\n{}\n```", s.content.replace(r#"\n"#, "\n")))
+          .embed(|e| e
+            .title(&s.title)
+            .description(&s.content)
+            .color(crate::commands::OK_COLOR)
+          )
+        ).await.expect("Failed to reply with snippet contents");
+      } else {
+        command.create_followup_message(&ctx.http, |f| f
+          .embed(|e| e
+            .title("Error")
+            .description(format!("Failed to find snippet '{}'", id))
+          )
+        ).await.expect("Failed to reply with error embed");
+      }
     }
   }
 }

@@ -84,16 +84,27 @@ impl EventHandler for Handler {
   }
 
   async fn message(&self, ctx: Context, msg: Message) {
-    let mut channel_name = "N/A".to_string();
-
-    if let Ok(channel) = msg.channel(&ctx).await {
-      if let Some(guild_channel) = channel.guild() {
-        channel_name = guild_channel.name.clone();
-      }
-    }
+    let channel_name = msg.channel(&ctx).await.ok()
+      .and_then(|c| c.guild())
+      .and_then(|c| Some(c.name))
+      .unwrap_or("N/A".to_string());
 
     let user_name = format!("{}#{}", msg.author.name, msg.author.discriminator);
-    println!("[#{}/{}]: {}", channel_name, user_name, msg.content);
+    let mut content = msg.content.clone();
+
+    let embeds_len = msg.embeds.len();
+
+    let suffix = match embeds_len {
+      2.. => Some("embeds"),
+      1 => Some("embed"),
+      _ => None
+    };
+
+    if let Some(suffix) = suffix {
+      content += &format!("({} {})", embeds_len, suffix);
+    }
+
+    println!("[#{channel_name}/{user_name}]: {content}");
 
     events::message(&ctx, &msg).await;
   }

@@ -1440,6 +1440,7 @@ dependencies = [
 name = "tabletbot"
 version = "1.0.0"
 dependencies = [
+ "lazy_static",
  "octocrab",
  "regex",
  "reqwest",

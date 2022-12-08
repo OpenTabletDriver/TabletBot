@@ -1,3 +1,4 @@
+use lazy_static::lazy_static;
 use octocrab::models::issues::Issue;
 use octocrab::models::pulls::PullRequest;
 use regex::Regex;
@@ -6,60 +7,73 @@ use serenity::model::prelude::Message;
 use serenity::prelude::Context;
 use serenity::utils::Colour;
 
-const REPO_OWNER: &str = "OpenTabletDriver";
-const REPO_NAME: &str = "OpenTabletDriver";
-
 const OPEN_COLOUR: Colour = Colour(0x238636);
 const RESOLVED_COLOUR: Colour = Colour(0x8957e5);
 const CLOSED_COLOUR: Colour = Colour(0xda3633);
 
+lazy_static! {
+  // TODO: Fix overlapping: '#1 #2 #3' will only match #1 and #3
+  // look-around, including look-ahead and look-behind, is not supported
+  static ref ISSUE_REGEX: Regex = Regex::new(r#"(?:^|\s)(?:(?P<owner>\w+)/)?(?P<repo>\w+)?#(?P<num>\d+)(?:$|\s)"#)
+    .expect("Expected numbers regex");
+}
+
 pub async fn message(ctx: &Context, message: &Message) {
   if let Some(embeds) = issue_embeds(message).await {
-    let typing = message.channel_id.start_typing(&ctx.http)
-      .expect("Failed to start typing");
-
-    message.channel_id.send_message(&ctx.http, |f| f
+    let result = message.channel_id.send_message(&ctx.http, |f| f
       .reference_message(message)
       .set_embeds(embeds)
-    ).await.expect("Failed to reply with github embed");
+    ).await;
 
-    typing.stop().expect("Failed to stop typing");
+    match result {
+      Err(e) => panic!("Failed to reply with issue embeds {:#?}", e),
+      _ => ()
+    }
   }
 }
 
 async fn issue_embeds(message: &Message) -> Option<Vec<CreateEmbed>> {
-  let mut embeds: Vec<CreateEmbed> = vec![];
-  let client = octocrab::instance();
-  let ratelimit = client.ratelimit();
-  let issues = client.issues(REPO_OWNER, REPO_NAME);
-  let prs = client.pulls(REPO_OWNER, REPO_NAME);
+  let mut captures = ISSUE_REGEX.captures_iter(&message.content)
+    .peekable();
 
-  let regex = Regex::new(r#" ?#([0-9]+[0-9]) ?"#)
-    .expect("Expected numbers regex");
+  if captures.peek().is_some() {
+    let mut embeds: Vec<CreateEmbed> = vec![];
+    let client = octocrab::instance();
+    let ratelimit = client.ratelimit().get().await
+      .expect("Failed to get rate limit");
 
-  for capture in regex.captures_iter(&message.content) {
-    if let Some(m) = capture.get(1) {
-      let issue_num = m.as_str().parse::<u64>()
-        .expect("Match is not a number");
+    for capture in captures {
+      let owner = capture.name("owner")
+        .and_then(|m| Some(m.as_str()))
+        .unwrap_or("OpenTabletDriver");
 
-      let ratelimit = ratelimit.get().await
-        .expect("Failed to get github rate limit");
+      let repo = capture.name("repo")
+        .and_then(|m| Some(m.as_str()))
+        .unwrap_or("OpenTabletDriver");
 
-      if ratelimit.rate.remaining > 2 {
-        if let Ok(pr) = prs.get(issue_num).await {
-          embeds.push(pr.embed());
-        } else if let Ok(issue) = issues.get(issue_num).await {
-          embeds.push(issue.embed());
+      let issues = client.issues(owner, repo);
+      let prs = client.pulls(owner, repo);
+
+      let issue_num = capture.name("num")
+        .and_then(|m| m.as_str().parse::<u64>().ok());
+
+      if let Some(issue_num) = issue_num {
+        if ratelimit.rate.remaining > 2 {
+          if let Ok(pr) = prs.get(issue_num).await {
+            embeds.push(pr.embed())
+          } else if let Ok(issue) = issues.get(issue_num).await {
+            embeds.push(issue.embed())
+          }
         }
       }
     }
+
+    if !embeds.is_empty() {
+      return Some(embeds)
+    }
   }
 
-  if embeds.is_empty() {
-    None
-  } else {
-    Some(embeds)
-  }
+  None
 }
 
 trait Embeddable {

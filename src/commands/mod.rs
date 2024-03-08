@@ -27,7 +27,7 @@ pub async fn respond_embed(ctx: &Context<'_>, embed: CreateEmbed, ephemeral: boo
     let result = ctx.send(builder).await;
 
     if let Err(e) = result {
-        println!("Failed to respond: {}", e)
+        println!("Failed to respond: {e}");
     }
 }
 
@@ -55,8 +55,8 @@ pub async fn paginate_lists<U, E>(
     embed_title: &str,
 ) -> Result<(), Error> {
     let ctx_id = ctx.id();
-    let prev_button_id = format!("{}prev", ctx_id);
-    let next_button_id = format!("{}next", ctx_id);
+    let prev_button_id = format!("{ctx_id}prev");
+    let next_button_id = format!("{ctx_id}next");
 
     let colour = Colour::TEAL;
 

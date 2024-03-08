@@ -8,6 +8,7 @@ use poise::serenity_prelude::{Colour, CreateEmbed, CreateEmbedFooter, EditMessag
 use regex::Regex;
 use serenity::futures::{self, Stream, StreamExt};
 
+#[allow(clippy::unused_async)]
 async fn autocomplete_key<'a>(
     ctx: Context<'a>,
     partial: &'a str,
@@ -65,7 +66,7 @@ pub async fn embed(
         match url.parse::<reqwest::Url>() {
             Ok(_) => {
                 if title.is_some() {
-                    embed = embed.url(url)
+                    embed = embed.url(url);
                 } else {
                     respond_err(
                         &ctx,
@@ -78,7 +79,7 @@ pub async fn embed(
             }
             Err(e) => {
                 let title = "Invalid url provided";
-                let content = &format!("The url '{}' is not a valid url: {}", url, e);
+                let content = &format!("The url '{url}' is not a valid url: {e}");
                 respond_err(&ctx, title, content).await;
                 return Ok(());
             }
@@ -231,7 +232,7 @@ pub async fn edit_embed(
             let builder = EditMessage::default().embed(embedb);
 
             match msg_clone.edit(ctx, builder).await {
-                Ok(_) => {
+                Ok(()) => {
                     respond_ok(
                         &ctx,
                         "Successfully edited embed",
@@ -241,7 +242,7 @@ pub async fn edit_embed(
                 }
                 Err(error) => {
                     // Better error handling later.
-                    respond_err(&ctx, "Error while handling message!", &format!("{}", error)).await
+                    respond_err(&ctx, "Error while handling message!", &format!("{error}")).await;
                 }
             }
         } else {
@@ -315,7 +316,7 @@ pub async fn add_repo(
     respond_ok(
         &ctx,
         "Successfully added issue token",
-        &format!("{}: {}/{}", key, owner, repository),
+        &format!("{key}: {owner}/{repository}"),
     )
     .await;
 
@@ -335,16 +336,16 @@ pub async fn remove_repo(
     // impl a solution directly into the types?
 
     // not sure why I have to do this, it won't settle otherwise.
-    let key_str = format!("The repository with the key '{}' has been removed", key);
-    match get_repo_details(&ctx, &key).await {
+    let key_str = format!("The repository with the key '{key}' has been removed");
+    match get_repo_details(&ctx, &key) {
         Some(_) => {
-            rm_repo(&ctx, &key).await;
+            rm_repo(&ctx, &key);
 
             respond_ok(&ctx, "Successfully removed repository!", &key_str).await;
         }
         None => {
             let title = "Failure to find repository";
-            let content = format!("The key '{}' does not exist.", key);
+            let content = format!("The key '{key}' does not exist.");
             respond_err(&ctx, title, &content).await;
         }
     };
@@ -385,7 +386,7 @@ pub async fn list_repos(ctx: Context<'_>) -> Result<(), Error> {
         })
         .collect::<Vec<(String, String, bool)>>()
         .chunks(25)
-        .map(|chunk| chunk.to_vec())
+        .map(<[(String, String, bool)]>::to_vec)
         .collect();
 
     super::paginate_lists(ctx, &pages, "Repositories").await?;
@@ -393,14 +394,14 @@ pub async fn list_repos(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-async fn get_repo_details(ctx: &Context<'_>, key: &str) -> Option<RepositoryDetails> {
+fn get_repo_details(ctx: &Context<'_>, key: &str) -> Option<RepositoryDetails> {
     let data = ctx.data();
     let rwlock_guard = data.state.read().unwrap();
 
     rwlock_guard.issue_prefixes.get(key).cloned()
 }
 
-async fn rm_repo(ctx: &Context<'_>, key: &str) {
+fn rm_repo(ctx: &Context<'_>, key: &str) {
     let data = ctx.data();
     let mut rwlock_guard = data.state.write().unwrap();
 

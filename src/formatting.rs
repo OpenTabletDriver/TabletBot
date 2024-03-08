@@ -1,6 +1,6 @@
 pub fn trim_indent(lines: &[&str]) -> String {
     let base_indent = get_base_indent(lines);
-    let prefix = String::from_iter(std::iter::repeat(' ').take(base_indent));
+    let prefix = " ".repeat(base_indent);
 
     let trimmed_lines: Vec<&str> = lines
         .iter()

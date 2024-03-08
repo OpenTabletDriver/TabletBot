@@ -35,10 +35,10 @@ async fn get_embeds(ctx: &Context, message: &Message) -> Option<Vec<CreateEmbed>
 
     typing.stop();
 
-    if !embeds.is_empty() {
-        Some(embeds)
-    } else {
+    if embeds.is_empty() {
         None
+    } else {
+        Some(embeds)
     }
 }
 
@@ -47,12 +47,12 @@ async fn http_get_body_text(url: &String) -> Option<String> {
         Ok(res) => match res.text().await {
             Ok(content) => Some(content),
             Err(e) => {
-                println!("Failed to get text: {}", e);
+                println!("Failed to get text: {e}");
                 None
             }
         },
         Err(e) => {
-            println!("Failed to get response: {}", e);
+            println!("Failed to get response: {e}");
             None
         }
     }
@@ -95,10 +95,10 @@ impl FileReference<'_> {
             })
             .collect();
 
-        if !files.is_empty() {
-            Some(files)
-        } else {
+        if files.is_empty() {
             None
+        } else {
+            Some(files)
         }
     }
 
@@ -108,7 +108,7 @@ impl FileReference<'_> {
         if let Some(mut content) = self.display().await {
             content.shrink_to(4096 - 8 - extension.len());
 
-            let description = format!("```{}\n{}\n```", extension, content);
+            let description = format!("```{extension}\n{content}\n```");
 
             let mut default = CreateEmbed::default();
             default = default
@@ -135,7 +135,7 @@ impl FileReference<'_> {
             "https://raw.githubusercontent.com/{}/{}/{}/{}",
             self.owner, self.repo, self.git_ref, self.path
         );
-        println!("Downloading content: {}", url);
+        println!("Downloading content: {url}");
 
         if let Some(content) = http_get_body_text(&url).await {
             let lines: Vec<&str> = content.split('\n').collect();

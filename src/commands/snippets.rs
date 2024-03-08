@@ -6,6 +6,7 @@ use crate::{
 use ::serenity::futures::{Stream, StreamExt};
 use poise::serenity_prelude::{futures, CreateAttachment, CreateEmbed};
 
+#[allow(clippy::unused_async)]
 async fn autocomplete_snippet<'a>(
     ctx: Context<'a>,
     partial: &'a str,
@@ -39,7 +40,7 @@ pub async fn snippet(
     id: String,
 ) -> Result<(), Error> {
     // Lazily get snippet because this is a prefix command too.
-    if let Some(snippet) = get_snippet_lazy(&ctx, &id).await {
+    if let Some(snippet) = get_snippet_lazy(&ctx, &id) {
         let embed = snippet.embed();
 
         respond_embed(&ctx, embed, false).await;
@@ -79,8 +80,7 @@ pub async fn create_snippet(
 
         rwlock_guard.snippets.push(snippet.clone());
 
-        rwlock_guard.snippets = rwlock_guard.snippets.clone();
-        println!("New snippet created '{}: {}'", id, title);
+        println!("New snippet created '{id}: {title}'");
         rwlock_guard.write();
 
         let mut embed = snippet.embed();
@@ -112,7 +112,7 @@ pub async fn edit_snippet(
     #[description = "The snippet's title"] title: Option<String>,
     #[description = "The snippet's content"] content: Option<String>,
 ) -> Result<(), Error> {
-    match get_snippet_lazy(&ctx, &id).await {
+    match get_snippet_lazy(&ctx, &id) {
         Some(mut snippet) => {
             if let Some(title) = title {
                 snippet.title = title;
@@ -135,7 +135,7 @@ pub async fn edit_snippet(
         None => {
             let title = &"Failed to edit snippet";
             let content = &&format!("The snippet '{id}' does not exist");
-            respond_err(&ctx, title, content).await
+            respond_err(&ctx, title, content).await;
         }
     };
 
@@ -150,9 +150,9 @@ pub async fn remove_snippet(
     #[description = "The snippet's id"]
     id: String,
 ) -> Result<(), Error> {
-    match get_snippet_lazy(&ctx, &id).await {
+    match get_snippet_lazy(&ctx, &id) {
         Some(snippet) => {
-            rm_snippet(&ctx, &snippet).await;
+            rm_snippet(&ctx, &snippet);
             let title = &"Snippet successfully removed";
             let content = &&format!("Removed snippet '{}: {}'", snippet.id, snippet.title);
             respond_ok(&ctx, title, content).await;
@@ -160,7 +160,7 @@ pub async fn remove_snippet(
         None => {
             let title = &"Failed to remove snippet";
             let content = &&format!("The snippet '{id}' does not exist");
-            respond_err(&ctx, title, content).await
+            respond_err(&ctx, title, content).await;
         }
     }
 
@@ -194,7 +194,7 @@ pub async fn list_snippets(ctx: Context<'_>) -> Result<(), Error> {
         .map(|snippet| (snippet.id.clone(), snippet.title.clone(), true))
         .collect::<Vec<(String, String, bool)>>()
         .chunks(25)
-        .map(|chunk| chunk.to_vec())
+        .map(<[(String, String, bool)]>::to_vec)
         .collect();
 
     super::paginate_lists(ctx, &pages, "Snippets").await?;
@@ -213,10 +213,10 @@ pub async fn export_snippet(
     #[description = "The snippet's id"]
     id: String,
 ) -> Result<(), Error> {
-    match get_snippet_lazy(&ctx, &id).await {
+    match get_snippet_lazy(&ctx, &id) {
         Some(snippet) => {
             let attachment = CreateAttachment::bytes(
-                format!("{}", &snippet.content.replace('\n', r"\n")),
+                snippet.content.replace('\n', r"\n").to_string(),
                 "snippet.txt",
             );
             let message = poise::CreateReply::default()
@@ -227,7 +227,7 @@ pub async fn export_snippet(
         None => {
             let title = &"Failed to export snippet";
             let content = &&format!("The snippet '{id}' does not exist");
-            respond_err(&ctx, title, content).await
+            respond_err(&ctx, title, content).await;
         }
     }
 
@@ -245,7 +245,7 @@ impl Embeddable for Snippet {
 }
 
 // Exact matches the snippet id and name.
-async fn _get_snippet(ctx: &Context<'_>, id: &str) -> Option<Snippet> {
+fn _get_snippet(ctx: &Context<'_>, id: &str) -> Option<Snippet> {
     let data = ctx.data();
     let rwlock_guard = data.state.read().unwrap();
 
@@ -257,7 +257,7 @@ async fn _get_snippet(ctx: &Context<'_>, id: &str) -> Option<Snippet> {
 }
 
 // Matches the snippet by checking if its starts with the id and name.
-async fn get_snippet_lazy(ctx: &Context<'_>, id: &str) -> Option<Snippet> {
+fn get_snippet_lazy(ctx: &Context<'_>, id: &str) -> Option<Snippet> {
     let data = ctx.data();
     let rwlock_guard = data.state.read().unwrap();
 
@@ -268,7 +268,7 @@ async fn get_snippet_lazy(ctx: &Context<'_>, id: &str) -> Option<Snippet> {
         .cloned()
 }
 
-async fn rm_snippet(ctx: &Context<'_>, snippet: &Snippet) {
+fn rm_snippet(ctx: &Context<'_>, snippet: &Snippet) {
     let data = ctx.data();
     let mut rwlock_guard = data.state.write().unwrap();
 

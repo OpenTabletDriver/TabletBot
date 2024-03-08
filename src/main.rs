@@ -1,3 +1,11 @@
+#![warn(clippy::pedantic)]
+// They aren't exactly any more unreadable this way, even more so considering they are hexadecimal.
+#![allow(clippy::unreadable_literal)]
+// Preference.
+#![allow(clippy::single_match, clippy::single_match_else)]
+// Possibly will fix in the future, it just isn't a problem as it stands.
+#![allow(clippy::too_many_lines)]
+
 pub(crate) mod commands;
 pub(crate) mod events;
 pub(crate) mod formatting;
@@ -20,13 +28,13 @@ type Context<'a> = poise::Context<'a, Data, Error>;
 
 async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
     match error {
-        poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {:?}", error),
+        poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {error:?}"),
         poise::FrameworkError::Command { error, ctx, .. } => {
             println!("Error in command `{}`: {:?}", ctx.command().name, error,);
         }
         error => {
             if let Err(e) = poise::builtins::on_error(error).await {
-                println!("Error while handling error: {}", e)
+                println!("Error while handling error: {e}");
             }
         }
     }

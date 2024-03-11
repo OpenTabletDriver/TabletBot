@@ -63,7 +63,6 @@ pub async fn create_snippet(
     #[description = "The snippet's title"] title: String,
     #[description = "The snippet's content"] content: String,
 ) -> Result<(), Error> {
-    // I really don't like the code I wrote here.
     let embed = {
         let mut rwlock_guard = ctx.data().state.write().unwrap();
 
@@ -72,19 +71,18 @@ pub async fn create_snippet(
         }
 
         let snippet = Snippet {
-            id: id.clone(),
-            title: title.clone(),
+            id,
+            title,
             content: content.replace(r"\n", "\n"),
         };
 
-        rwlock_guard.snippets.push(snippet.clone());
-
-        rwlock_guard.snippets = rwlock_guard.snippets.clone();
-        println!("New snippet created '{}: {}'", id, title);
-        rwlock_guard.write();
-
+        println!("New snippet created '{}: {}'", snippet.id, snippet.title);
         let mut embed = snippet.embed();
+
         embed = embed.colour(super::OK_COLOUR);
+
+        rwlock_guard.snippets.push(snippet);
+        rwlock_guard.write();
 
         if rwlock_guard.snippets.len() > 25 {
             embed = embed.field(

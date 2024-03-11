@@ -19,14 +19,12 @@ async fn autocomplete_key<'a>(
             .unwrap()
             .issue_prefixes
             .iter()
-            .take(25)
             .map(|s| s.0.clone())
             .collect()
     };
 
     futures::stream::iter(snippet_list)
-        .filter(move |name| futures::future::ready(name.starts_with(partial)))
-        .map(|name| name.to_string())
+        .filter(move |name| futures::future::ready(name.contains(partial)))
 }
 
 /// Create an embed in the current channel.

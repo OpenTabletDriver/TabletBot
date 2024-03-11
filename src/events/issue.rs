@@ -1,11 +1,12 @@
 use std::time::Duration;
 
-use crate::{structures::Embeddable, Data};
+use crate::{commands::interaction_err, structures::Embeddable, Data};
 use ::serenity::builder::CreateEmbedAuthor;
 use octocrab::models::issues::Issue;
 use octocrab::models::pulls::PullRequest;
 use poise::serenity_prelude::{
-    self as serenity, Colour, Context, CreateEmbed, Message, Permissions,
+    self as serenity, ButtonStyle, Colour, Context, CreateActionRow, CreateButton, CreateEmbed,
+    CreateInteractionResponse, Message, Permissions,
 };
 use regex::Regex;
 
@@ -23,11 +24,15 @@ pub async fn message(data: &Data, ctx: &Context, message: &Message) {
         let ctx_id = message.id.get(); // poise context isn't available here.
         let remove_id = format!("{}remove", ctx_id);
         let hide_body_id = format!("{}hide_body", ctx_id);
+        let remove = CreateActionRow::Buttons(vec![CreateButton::new(&remove_id)
+            .label("delete")
+            .style(ButtonStyle::Danger)]);
+
         let components = serenity::CreateActionRow::Buttons(vec![
-            serenity::CreateButton::new(&remove_id)
+            CreateButton::new(&remove_id)
                 .label("delete")
-                .style(serenity::ButtonStyle::Danger),
-            serenity::CreateButton::new(&hide_body_id).label("hide body"),
+                .style(ButtonStyle::Danger),
+            CreateButton::new(&hide_body_id).label("hide body"),
         ]);
 
         let content: serenity::CreateMessage = serenity::CreateMessage::default()
@@ -56,12 +61,19 @@ pub async fn message(data: &Data, ctx: &Context, message: &Message) {
                 && (press.user.id == message.author.id || has_perms)
             {
                 let _ = press
-                    .create_response(ctx, serenity::CreateInteractionResponse::Acknowledge)
+                    .create_response(ctx, CreateInteractionResponse::Acknowledge)
                     .await;
                 if let Ok(ref msg) = msg_result {
                     let _ = msg.delete(ctx).await;
                 }
                 msg_deleted = true;
+            } else {
+                interaction_err(
+                    ctx,
+                    &press,
+                    "Unable to use interaction because you are missing `MANAGE_MESSAGES`.",
+                )
+                .await;
             }
 
             if press.data.custom_id == hide_body_id
@@ -82,12 +94,20 @@ pub async fn message(data: &Data, ctx: &Context, message: &Message) {
                             ctx,
                             serenity::CreateInteractionResponse::UpdateMessage(
                                 serenity::CreateInteractionResponseMessage::new()
-                                    .embeds(hid_body_embeds),
+                                    .embeds(hid_body_embeds)
+                                    .components(vec![remove.clone()]),
                             ),
                         )
                         .await;
                 }
                 body_hid = true;
+            } else {
+                interaction_err(
+                    ctx,
+                    &press,
+                    "Unable to use interaction because you are missing `MANAGE_MESSAGES`.",
+                )
+                .await;
             }
         }
         // Triggers on timeout.
@@ -98,7 +118,6 @@ pub async fn message(data: &Data, ctx: &Context, message: &Message) {
                     .await;
             }
         }
-        //
     }
 }
 

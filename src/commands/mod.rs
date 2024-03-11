@@ -8,8 +8,9 @@ pub(crate) const ERROR_COLOUR: Colour = Colour(0xe74c3c);
 use crate::{Context, Error};
 
 use poise::serenity_prelude::{
-    self as serenity, Colour, ComponentInteractionCollector, CreateActionRow, CreateButton,
-    CreateEmbed, CreateEmbedFooter, CreateInteractionResponse, CreateInteractionResponseMessage,
+    self as serenity, Colour, ComponentInteraction, ComponentInteractionCollector, CreateActionRow,
+    CreateButton, CreateEmbed, CreateEmbedFooter, CreateInteractionResponse,
+    CreateInteractionResponseMessage,
 };
 use poise::CreateReply;
 
@@ -47,6 +48,20 @@ pub async fn respond_err(ctx: &Context<'_>, title: &str, content: &str) {
         .colour(ERROR_COLOUR);
 
     respond_embed(ctx, embed, false).await;
+}
+
+pub async fn interaction_err(ctx: &serenity::Context, press: &ComponentInteraction, content: &str) {
+    let builder = CreateInteractionResponse::Message(
+        CreateInteractionResponseMessage::new()
+            .embed(
+                CreateEmbed::new()
+                    .title("Unable to execute interaction")
+                    .description(content)
+                    .colour(ERROR_COLOUR),
+            )
+            .ephemeral(true),
+    );
+    let _ = press.create_response(ctx, builder).await;
 }
 
 pub async fn paginate_lists<U, E>(

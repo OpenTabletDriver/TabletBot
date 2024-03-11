@@ -4,7 +4,10 @@ use crate::{
     Context, Error,
 };
 use ::serenity::futures::{Stream, StreamExt};
-use poise::serenity_prelude::{futures, CreateAttachment, CreateEmbed};
+use poise::serenity_prelude::{
+    self as serenity, futures, CreateAttachment, CreateEmbed, CreateInteractionResponse,
+    CreateInteractionResponseMessage,
+};
 
 async fn autocomplete_snippet<'a>(
     ctx: Context<'a>,
@@ -17,14 +20,12 @@ async fn autocomplete_snippet<'a>(
             .unwrap()
             .snippets
             .iter()
-            .take(25)
             .map(|s| format!("{}: {}", s.id, s.title))
             .collect()
     };
 
     futures::stream::iter(snippet_list)
-        .filter(move |name| futures::future::ready(name.starts_with(partial)))
-        .map(|name| name.to_string())
+        .filter(move |name| futures::future::ready(name.contains(partial)))
 }
 
 /// Show a snippet
@@ -152,10 +153,7 @@ pub async fn remove_snippet(
 ) -> Result<(), Error> {
     match get_snippet_lazy(&ctx, &id).await {
         Some(snippet) => {
-            rm_snippet(&ctx, &snippet).await;
-            let title = &"Snippet successfully removed";
-            let content = &&format!("Removed snippet '{}: {}'", snippet.id, snippet.title);
-            respond_ok(&ctx, title, content).await;
+            remove_snippet_confirm(&ctx, &snippet).await?;
         }
         None => {
             let title = &"Failed to remove snippet";
@@ -215,10 +213,8 @@ pub async fn export_snippet(
 ) -> Result<(), Error> {
     match get_snippet_lazy(&ctx, &id).await {
         Some(snippet) => {
-            let attachment = CreateAttachment::bytes(
-                format!("{}", &snippet.content.replace('\n', r"\n")),
-                "snippet.txt",
-            );
+            let attachment =
+                CreateAttachment::bytes(snippet.content.replace('\n', r"\n"), "snippet.txt");
             let message = poise::CreateReply::default()
                 .attachment(attachment)
                 .embed(snippet.embed());
@@ -281,4 +277,84 @@ async fn rm_snippet(ctx: &Context<'_>, snippet: &Snippet) {
     println!("Removing snippet '{}: {}'", snippet.id, snippet.title);
     rwlock_guard.snippets.remove(index);
     rwlock_guard.write();
+}
+
+async fn remove_snippet_confirm(ctx: &Context<'_>, snippet: &Snippet) -> Result<(), Error> {
+    let snippet_embed = snippet.embed();
+
+    let ctx_id = ctx.id();
+    let delete_id = format!("{}cancel", ctx_id);
+    let cancel_id = format!("{}delete", ctx_id);
+
+    let components = serenity::CreateActionRow::Buttons(vec![
+        serenity::CreateButton::new(&cancel_id).label("Cancel"),
+        serenity::CreateButton::new(&delete_id)
+            .label("Delete")
+            .style(serenity::ButtonStyle::Danger),
+    ]);
+
+    let builder: poise::CreateReply = poise::CreateReply::default()
+        .content(format!("Are you sure you want to delete snippet `{}`?", snippet.id))
+        .ephemeral(true)
+        .embed(snippet_embed)
+        .components(vec![components]);
+
+    ctx.send(builder).await?;
+
+    while let Some(press) = serenity::ComponentInteractionCollector::new(ctx)
+        .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+        .timeout(std::time::Duration::from_secs(60))
+        .await
+    {
+        if press.data.custom_id == delete_id {
+            handle_delete(ctx, snippet, press).await?;
+        } else if press.data.custom_id == cancel_id {
+            handle_cancel(ctx, press).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_delete(
+    ctx: &Context<'_>,
+    snippet: &Snippet,
+    interaction: serenity::ComponentInteraction,
+) -> Result<(), Error> {
+
+    rm_snippet(ctx, snippet).await;
+    interaction
+        .create_response(
+            ctx,
+            CreateInteractionResponse::UpdateMessage(
+                CreateInteractionResponseMessage::new().content("Deleted!")
+                    .embeds(vec![])
+                    .components(vec![]),
+            ),
+        )
+        .await?;
+
+        let title = format!("{} removed a snippet", ctx.author().tag());
+        let content = &&format!("Removed snippet `{}`", snippet.format_output());
+        respond_ok(ctx, &title, content).await;
+
+    Ok(())
+}
+
+async fn handle_cancel(
+    ctx: &Context<'_>,
+    interaction: serenity::ComponentInteraction,
+) -> Result<(), Error> {
+    interaction
+        .create_response(
+            ctx,
+            CreateInteractionResponse::UpdateMessage(
+                CreateInteractionResponseMessage::new()
+                    .content("Aborted.")
+                    .embeds(vec![])
+                    .components(vec![]),
+            ),
+        )
+        .await?;
+    Ok(())
 }

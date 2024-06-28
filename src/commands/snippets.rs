@@ -66,29 +66,29 @@ pub async fn create_snippet(
     #[description = "The snippet's title"] title: String,
     #[description = "The snippet's content"] content: String,
 ) -> Result<(), Error> {
+    let snippet = Snippet {
+        id: id.clone(),
+        title,
+        content: content.replace(r"\n", "\n"),
+    };
+
+    let mut embed = snippet.embed();
+    embed = embed.colour(super::OK_COLOUR);
+
     let embed = {
-        let mut rwlock_guard = ctx.data().state.write().unwrap();
+        let data = ctx.data();
+        let mut rwlock_guard = data.state.write().unwrap();
 
         if let Some(position) = rwlock_guard.snippets.iter().position(|s| s.id.eq(&id)) {
             rwlock_guard.snippets.remove(position);
         }
 
-        let snippet = Snippet {
-            id,
-            title,
-            content: content.replace(r"\n", "\n"),
-        };
-
         println!("New snippet created '{}: {}'", snippet.id, snippet.title);
 
-        let mut embed = snippet.embed();
-
-        embed = embed.colour(super::OK_COLOUR);
-
-        rwlock_guard.snippets.push(snippet);
+        rwlock_guard.snippets.push(snippet.clone());
         rwlock_guard.write();
 
-        embed
+        embed.clone()
     };
 
     respond_embed(&ctx, embed, false).await;
@@ -117,7 +117,8 @@ pub async fn edit_snippet(
             }
 
             {
-                let mut rwlock_guard = ctx.data().state.write().unwrap();
+                let data = ctx.data();
+                let mut rwlock_guard = data.state.write().unwrap();
                 rwlock_guard.snippets.push(snippet.clone());
                 println!("Snippet edited '{}: {}'", snippet.title, snippet.content);
                 rwlock_guard.write();
@@ -206,8 +207,10 @@ pub async fn export_snippet(
 ) -> Result<(), Error> {
     match get_snippet_lazy(&ctx, &id) {
         Some(snippet) => {
-            let attachment =
-                CreateAttachment::bytes(snippet.content.replace('\n', r"\n"), "snippet.txt");
+            let attachment = CreateAttachment::bytes(
+                snippet.content.replace('\n', r"\n").into_bytes(),
+                "snippet.txt",
+            );
             let message = poise::CreateReply::default()
                 .attachment(attachment)
                 .embed(snippet.embed());
@@ -224,7 +227,7 @@ pub async fn export_snippet(
 }
 
 impl Embeddable for Snippet {
-    fn embed(&self) -> CreateEmbed {
+    fn embed(&self) -> CreateEmbed<'_> {
         CreateEmbed::default()
             .title(&self.title)
             .description(&self.content)
@@ -297,10 +300,11 @@ async fn remove_snippet_confirm(ctx: &Context<'_>, snippet: &Snippet) -> Result<
 
     ctx.send(builder).await?;
 
-    while let Some(press) = serenity::ComponentInteractionCollector::new(ctx)
-        .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
-        .timeout(std::time::Duration::from_secs(60))
-        .await
+    while let Some(press) =
+        serenity::ComponentInteractionCollector::new(ctx.serenity_context().shard.clone())
+            .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+            .timeout(std::time::Duration::from_secs(60))
+            .await
     {
         if press.data.custom_id == delete_id {
             handle_delete(ctx, snippet, press).await?;
@@ -320,7 +324,7 @@ async fn handle_delete(
     rm_snippet(ctx, snippet);
     interaction
         .create_response(
-            ctx,
+            ctx.http(),
             CreateInteractionResponse::UpdateMessage(
                 CreateInteractionResponseMessage::new()
                     .content("Deleted!")
@@ -343,7 +347,7 @@ async fn handle_cancel(
 ) -> Result<(), Error> {
     interaction
         .create_response(
-            ctx,
+            ctx.http(),
             CreateInteractionResponse::UpdateMessage(
                 CreateInteractionResponseMessage::new()
                     .content("Aborted.")

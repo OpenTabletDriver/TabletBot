@@ -1,4 +1,5 @@
 pub mod snippets;
+pub mod udev;
 pub mod utils;
 
 pub(crate) const ACCENT_COLOUR: Colour = Colour(0x8957e5);

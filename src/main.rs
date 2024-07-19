@@ -91,6 +91,7 @@ async fn main() {
             commands::utils::add_repo(),
             commands::utils::remove_repo(),
             commands::utils::list_repos(),
+            commands::udev::generate_udev(),
         ],
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("!".into()),

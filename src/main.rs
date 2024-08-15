@@ -19,16 +19,19 @@ use octocrab::Octocrab;
 use poise::serenity_prelude::{self as serenity, GatewayIntents};
 use structures::BotState;
 
+use std::sync::atomic::AtomicBool;
+
 pub struct Data {
-    pub octocrab: Arc<Octocrab>,
+    pub has_started: AtomicBool,
+    pub octocrab: Octocrab,
     pub state: RwLock<BotState>,
 }
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
+type FrameworkContext<'a> = poise::FrameworkContext<'a, Data, Error>;
 
 async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
     match error {
-        poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {error:?}"),
         poise::FrameworkError::Command { ctx, error, .. } => {
             let error = error.to_string();
             eprintln!("An error occured in a command: {error}");
@@ -73,7 +76,7 @@ async fn main() {
 
     let octo_builder = Octocrab::builder().personal_token(github_token);
 
-    let octocrab = octocrab::initialise(octo_builder).expect("Failed to build github client");
+    let octocrab = octo_builder.build().expect("Failed to build github client");
 
     let state = RwLock::new(BotState::read());
 
@@ -109,26 +112,25 @@ async fn main() {
         },
 
         skip_checks_for_owners: false,
-        event_handler: |ctx, event: &serenity::FullEvent, framework, data| {
-            Box::pin(events::event_handler(ctx, event, framework, data))
-        },
+        event_handler: |framework, event| Box::pin(events::event_handler(framework, event)),
         ..Default::default()
     };
 
-    let framework = poise::Framework::new(options, move |ctx, ready, framework| {
-        Box::pin(async move {
-            println!("Logged in as {}", ready.user.name);
-            poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-            Ok(Data { octocrab, state })
-        })
-    });
+    let data = Data {
+        has_started: AtomicBool::new(false),
+        octocrab,
+        state,
+    };
+
+    let framework = poise::Framework::new(options);
 
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT;
 
-    let mut client = serenity::Client::builder(discord_token, intents)
+    let mut client = serenity::Client::builder(&discord_token, intents)
         .framework(framework)
+        .data(Arc::new(data))
         .await
         .unwrap();
 

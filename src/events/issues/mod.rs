@@ -1,10 +1,11 @@
 use std::{sync::OnceLock, time::Duration};
 
-use crate::{commands::interaction_err, structures::Embeddable, Data};
+use crate::{commands::interaction_err, structures::Embeddable, Data, FrameworkContext};
 
-use arrayvec::ArrayString;
+use aformat::aformat;
+use octocrab::models::issues::Issue;
 use poise::serenity_prelude::{
-    self as serenity, ButtonStyle, Context, CreateActionRow, CreateButton, CreateEmbed,
+    self as serenity, ButtonStyle, CreateActionRow, CreateButton, CreateEmbed,
     CreateInteractionResponse, Message, Permissions,
 };
 use regex::Regex;
@@ -32,123 +33,116 @@ impl Kind {
     }
 }
 
-pub async fn message(data: &Data, ctx: &Context, message: &Message) {
-    if let Some(embeds) = issue_embeds(data, message).await {
-        let typing = message.channel_id.start_typing(&ctx.http);
+pub async fn message(framework: FrameworkContext<'_>, message: &Message) {
+    let data = framework.user_data();
+    let ctx = framework.serenity_context;
 
-        // usually I would use poise context to generate a unique id, but its not available
-        // on events, but we also aren't handling different invocation of this on a single message,
-        // so its not actually needed.
+    let issues = issues(&data, message).await;
 
-        // The max length of this is known (its just a u64) and with a little neat library
-        // we can avoid even a stack allocation! (thanks gnome)
-        let ctx_id = message.id.get().to_arraystring();
+    let Some(issues) = issues else { return };
 
-        // we know the max size so we don't need to allocate.
-        // 20 + 6
-        let mut remove_id = ArrayString::<26>::new();
-        remove_id.push_str(&ctx_id);
-        remove_id.push_str("delete");
+    let embeds = issues.iter().map(|i| i.embed()).collect::<Vec<_>>();
 
-        // 20 + 9
-        let mut hide_body_id = ArrayString::<29>::new();
-        hide_body_id.push_str(&ctx_id);
-        hide_body_id.push_str("hide_body");
+    let typing = message.channel_id.start_typing(ctx.http.clone());
 
-        let remove = CreateActionRow::Buttons(vec![CreateButton::new(&*remove_id)
+    let ctx_id = message.id.get().to_arraystring();
+
+    let remove_id = aformat!("{ctx_id}delete");
+    let hide_body_id = aformat!("{ctx_id}hide_body");
+
+    let remove = CreateActionRow::Buttons(vec![CreateButton::new(&*remove_id)
+        .label("delete")
+        .style(ButtonStyle::Danger)]);
+
+    let components = serenity::CreateActionRow::Buttons(vec![
+        CreateButton::new(&*remove_id)
             .label("delete")
-            .style(ButtonStyle::Danger)]);
+            .style(ButtonStyle::Danger),
+        CreateButton::new(&*hide_body_id).label("hide body"),
+    ]);
 
-        let components = serenity::CreateActionRow::Buttons(vec![
-            CreateButton::new(&*remove_id)
-                .label("delete")
-                .style(ButtonStyle::Danger),
-            CreateButton::new(&*hide_body_id).label("hide body"),
-        ]);
+    let content: serenity::CreateMessage = serenity::CreateMessage::default()
+        .embeds(embeds)
+        .reference_message(message)
+        .components(vec![components]);
+    let msg_result = message.channel_id.send_message(&ctx.http, content).await;
+    typing.stop();
 
-        let content: serenity::CreateMessage = serenity::CreateMessage::default()
-            .embeds(embeds)
-            .reference_message(message)
-            .components(vec![components]);
-        let msg_result = message.channel_id.send_message(ctx, content).await;
-        typing.stop();
+    let mut msg_deleted = false;
+    let mut body_hid = false;
+    while let Some(press) = serenity::ComponentInteractionCollector::new(ctx.shard.clone())
+        .filter(move |press| press.data.custom_id.starts_with(&*ctx_id))
+        .timeout(Duration::from_secs(60))
+        .await
+    {
+        let has_perms = press.member.as_ref().map_or(false, |member| {
+            member.permissions.map_or(false, |member_perms| {
+                member_perms.contains(Permissions::MANAGE_MESSAGES)
+            })
+        });
 
-        let mut msg_deleted = false;
-        let mut body_hid = false;
-        while let Some(press) = serenity::ComponentInteractionCollector::new(ctx)
-            .filter(move |press| press.data.custom_id.starts_with(&*ctx_id))
-            .timeout(Duration::from_secs(60))
-            .await
-        {
-            let has_perms = press.member.as_ref().map_or(false, |member| {
-                member.permissions.map_or(false, |member_perms| {
-                    member_perms.contains(Permissions::MANAGE_MESSAGES)
-                })
-            });
+        // Users who do not own the message or have permissions cannot execute the interactions.
+        if !(press.user.id == message.author.id || has_perms) {
+            interaction_err(
+                ctx,
+                &press,
+                "Unable to use interaction because you are missing `MANAGE_MESSAGES`.",
+            )
+            .await;
 
-            // Users who do not own the message or have permissions cannot execute the interactions.
-            if !(press.user.id == message.author.id || has_perms) {
-                interaction_err(
-                    ctx,
-                    &press,
-                    "Unable to use interaction because you are missing `MANAGE_MESSAGES`.",
-                )
-                .await;
-
-                continue;
-            }
-
-            match Kind::from_id(&press.data.custom_id, &ctx_id) {
-                Some(Kind::Delete) => {
-                    let _ = press
-                        .create_response(ctx, CreateInteractionResponse::Acknowledge)
-                        .await;
-                    if let Ok(ref msg) = msg_result {
-                        let _ = msg.delete(ctx).await;
-                    }
-                    msg_deleted = true;
-                }
-                Some(Kind::HideBody) => {
-                    if !body_hid {
-                        let mut hid_body_embeds: Vec<CreateEmbed> = Vec::new();
-                        if let Ok(ref msg) = msg_result {
-                            for mut embed in msg.embeds.clone() {
-                                embed.description = None;
-                                let embed: CreateEmbed = embed.clone().into();
-                                hid_body_embeds.push(embed);
-                            }
-                        }
-
-                        let _ = press
-                            .create_response(
-                                ctx,
-                                serenity::CreateInteractionResponse::UpdateMessage(
-                                    serenity::CreateInteractionResponseMessage::new()
-                                        .embeds(hid_body_embeds)
-                                        .components(vec![remove.clone()]),
-                                ),
-                            )
-                            .await;
-                    }
-                    body_hid = true;
-                }
-                None => {}
-            }
+            continue;
         }
 
-        // Triggers on timeout.
-        if !msg_deleted {
-            if let Ok(mut msg) = msg_result {
-                let _ = msg
-                    .edit(ctx, serenity::EditMessage::default().components(vec![]))
+        match Kind::from_id(&press.data.custom_id, &ctx_id) {
+            Some(Kind::Delete) => {
+                let _ = press
+                    .create_response(&ctx.http, CreateInteractionResponse::Acknowledge)
                     .await;
+                if let Ok(ref msg) = msg_result {
+                    let _ = msg.delete(&ctx.http, None).await;
+                }
+                msg_deleted = true;
             }
+            Some(Kind::HideBody) => {
+                if !body_hid {
+                    let mut hid_body_embeds: Vec<CreateEmbed> = Vec::new();
+                    if let Ok(ref msg) = msg_result {
+                        for mut embed in msg.embeds.clone() {
+                            embed.description = None;
+                            let embed: CreateEmbed = embed.clone().into();
+                            hid_body_embeds.push(embed);
+                        }
+                    }
+
+                    let _ = press
+                        .create_response(
+                            &ctx.http,
+                            serenity::CreateInteractionResponse::UpdateMessage(
+                                serenity::CreateInteractionResponseMessage::new()
+                                    .embeds(hid_body_embeds)
+                                    .components(vec![remove.clone()]),
+                            ),
+                        )
+                        .await;
+                }
+                body_hid = true;
+            }
+            None => {}
+        }
+    }
+
+    // Triggers on timeout.
+    if !msg_deleted {
+        if let Ok(mut msg) = msg_result {
+            let _ = msg
+                .edit(ctx, serenity::EditMessage::default().components(vec![]))
+                .await;
         }
     }
 }
 
-async fn issue_embeds(data: &Data, message: &Message) -> Option<Vec<CreateEmbed>> {
-    let mut embeds: Vec<CreateEmbed> = vec![];
+async fn issues(data: &Data, message: &Message) -> Option<Vec<Issue>> {
+    let mut collection = vec![];
     let client = octocrab::instance();
     let ratelimit = client.ratelimit();
 
@@ -156,44 +150,44 @@ async fn issue_embeds(data: &Data, message: &Message) -> Option<Vec<CreateEmbed>
 
     let custom_repos = { data.state.read().unwrap().issue_prefixes.clone() };
 
-    let mut issues = client.issues(DEFAULT_REPO_OWNER, DEFAULT_REPO_NAME);
-    let mut prs = client.pulls(DEFAULT_REPO_OWNER, DEFAULT_REPO_NAME);
+    let issues = client.issues(DEFAULT_REPO_OWNER, DEFAULT_REPO_NAME);
 
     for capture in regex.captures_iter(&message.content) {
-        if let Some(m) = capture.get(2) {
-            let issue_num = m.as_str().parse::<u64>().expect("Match is not a number");
+        let Some(m) = capture.get(2) else { continue };
 
-            if let Some(repo) = capture.get(1) {
-                let repository = custom_repos.get(&repo.as_str().to_lowercase());
-                if let Some(repository) = repository {
-                    let (owner, repo) = repository.get();
+        let issue_num = m.as_str().parse::<u64>().expect("Match is not a number");
 
-                    issues = client.issues(owner, repo);
-                    prs = client.pulls(owner, repo);
-                } else {
-                    continue; // discards when it doesn't match a repo.
-                };
+        let ratelimit = ratelimit
+            .get()
+            .await
+            .expect("Failed to get github rate limit");
+
+        if let Some(repo) = capture.get(1) {
+            let repository = custom_repos.get(&repo.as_str().to_lowercase());
+            // if there is not a repository that matches the input, ignore.
+            let Some(repository) = repository else {
+                continue;
+            };
+
+            let (owner, repo) = repository.get();
+
+            if let Ok(issue) = client.issues(owner, repo).get(issue_num).await {
+                collection.push(issue);
+                continue;
             }
+        }
 
-            let ratelimit = ratelimit
-                .get()
-                .await
-                .expect("Failed to get github rate limit");
-
-            if ratelimit.rate.remaining > 2 {
-                if let Ok(pr) = prs.get(issue_num).await {
-                    embeds.push(pr.embed());
-                } else if let Ok(issue) = issues.get(issue_num).await {
-                    embeds.push(issue.embed());
-                }
+        if ratelimit.rate.remaining >= 1 {
+            if let Ok(issue) = issues.get(issue_num).await {
+                collection.push(issue);
             }
         }
     }
 
-    if embeds.is_empty() {
+    if collection.is_empty() {
         None
     } else {
-        Some(embeds)
+        Some(collection)
     }
 }
 

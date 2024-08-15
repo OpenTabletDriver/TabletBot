@@ -1,36 +1,50 @@
+use futures::future::join_all;
 use regex::{Match, Regex};
 use std::str::FromStr;
 use std::{path::Path, sync::OnceLock};
 
-use poise::serenity_prelude::{self as serenity, Colour, Context, CreateEmbed, Message};
+use poise::serenity_prelude::{self as serenity, Colour, CreateEmbed, Http, Message};
+use std::sync::Arc;
 
 use crate::formatting::trim_indent;
+
+use crate::FrameworkContext;
 
 // A shade of purple.
 const ACCENT_COLOUR: Colour = Colour::new(0x8957e5);
 
-pub async fn message(ctx: &Context, message: &Message) {
-    if let Some(embeds) = get_embeds(ctx, message).await {
-        let typing = message.channel_id.start_typing(&ctx.http);
+pub async fn message(framework: FrameworkContext<'_>, message: &Message) {
+    let http = &framework.serenity_context.http.clone();
 
-        let content = serenity::CreateMessage::default()
-            .embeds(embeds)
-            .reference_message(message);
-        let _ = message.channel_id.send_message(ctx, content).await;
+    let Some(file_refs) = get_file_refs(http.clone(), message) else {
+        return;
+    };
 
-        typing.stop();
-    }
+    // This is just cursed. I have no other way to explain this but its the only way I can figure
+    // out how to satisfy the lifetimes.
+    let embeds = join_all(file_refs.iter().map(FileReference::create_embed))
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+
+    let typing = message.channel_id.start_typing(http.clone());
+
+    let content = serenity::CreateMessage::default()
+        .embeds(embeds)
+        .reference_message(message);
+    let _ = message.channel_id.send_message(http, content).await;
+
+    typing.stop();
 }
 
-async fn get_embeds(ctx: &Context, message: &Message) -> Option<Vec<CreateEmbed>> {
-    let typing = message.channel_id.start_typing(&ctx.http);
-    let mut embeds: Vec<CreateEmbed> = vec![];
+fn get_file_refs(http: Arc<Http>, message: &Message) -> Option<Vec<FileReference<'_>>> {
+    let typing = message.channel_id.start_typing(http);
+    let mut embeds = vec![];
 
     if let Some(refs) = FileReference::try_from_str(&message.content) {
         for file_ref in refs {
-            if let Some(embed) = file_ref.create_embed().await {
-                embeds.push(embed);
-            }
+            embeds.push(file_ref);
         }
     }
 

@@ -163,7 +163,7 @@ pub async fn edit_embed(
                     embedb = embedb.title(title);
                 }
             } else if let Some(t) = &embed.title {
-                embedb = embedb.title(t);
+                embedb = embedb.title(t.as_str());
             }
 
             if let Some(description) = description {
@@ -171,7 +171,7 @@ pub async fn edit_embed(
                     embedb = embedb.description(description);
                 }
             } else if let Some(d) = &embed.description {
-                embedb = embedb.description(d);
+                embedb = embedb.description(d.as_str());
             }
 
             if let Some(color) = color {
@@ -200,7 +200,7 @@ pub async fn edit_embed(
                     embedb = embedb.url(url);
                 }
             } else if let Some(u) = &embed.url {
-                embedb = embedb.url(u);
+                embedb = embedb.url(u.as_str());
             }
 
             if let Some(image) = image {
@@ -293,7 +293,9 @@ pub async fn add_repo(
     }
 
     {
-        let mut rwlock_guard = { ctx.data().state.write().unwrap() };
+        let data = ctx.data();
+        let mut rwlock_guard = data.state.write().unwrap();
+
         let details = RepositoryDetails {
             owner: owner.clone(),
             name: repository.clone(),
@@ -302,6 +304,7 @@ pub async fn add_repo(
         rwlock_guard
             .issue_prefixes
             .insert(key.clone().to_lowercase(), details);
+
         println!(
             "Successfully added repository {} for **{}/{}**",
             key.to_lowercase(),

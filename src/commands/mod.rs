@@ -6,7 +6,6 @@ pub(crate) const ACCENT_COLOUR: Colour = Colour(0x8957e5);
 pub(crate) const OK_COLOUR: Colour = Colour(0x2ecc71);
 pub(crate) const ERROR_COLOUR: Colour = Colour(0xe74c3c);
 
-use arrayvec::ArrayString;
 use to_arraystring::ToArrayString;
 
 use crate::{Context, Error};
@@ -25,7 +24,7 @@ pub async fn register(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn respond_embed(ctx: &Context<'_>, embed: CreateEmbed, ephemeral: bool) {
+pub async fn respond_embed(ctx: &Context<'_>, embed: CreateEmbed<'_>, ephemeral: bool) {
     let builder = poise::CreateReply::default()
         .embed(embed)
         .ephemeral(ephemeral);
@@ -65,7 +64,7 @@ pub async fn interaction_err(ctx: &serenity::Context, press: &ComponentInteracti
             )
             .ephemeral(true),
     );
-    let _ = press.create_response(ctx, builder).await;
+    let _ = press.create_response(&ctx.http, builder).await;
 }
 
 enum Kind {
@@ -92,13 +91,8 @@ pub async fn paginate_lists(
 ) -> Result<(), Error> {
     let ctx_id = ctx.id().to_arraystring();
 
-    let mut prev_button_id = ArrayString::<24>::new();
-    prev_button_id.push_str(&ctx_id);
-    prev_button_id.push_str("prev");
-
-    let mut next_button_id = ArrayString::<24>::new();
-    next_button_id.push_str(&ctx_id);
-    next_button_id.push_str("next");
+    let prev_button_id = format!("{ctx_id}prev");
+    let next_button_id = format!("{ctx_id}next");
 
     let colour = Colour::TEAL;
 
@@ -135,10 +129,11 @@ pub async fn paginate_lists(
     let msg = ctx.send(reply).await?;
 
     if pages.len() > 1 {
-        while let Some(press) = ComponentInteractionCollector::new(ctx)
-            .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
-            .timeout(std::time::Duration::from_secs(180))
-            .await
+        while let Some(press) =
+            ComponentInteractionCollector::new(ctx.serenity_context().shard.clone())
+                .filter(move |press| press.data.custom_id.starts_with(ctx_id.as_str()))
+                .timeout(std::time::Duration::from_secs(180))
+                .await
         {
             match Kind::from_id(&press.data.custom_id, &ctx_id) {
                 Some(Kind::Next) => {
@@ -155,7 +150,7 @@ pub async fn paginate_lists(
 
             press
                 .create_response(
-                    ctx.serenity_context(),
+                    ctx.http(),
                     CreateInteractionResponse::UpdateMessage(
                         CreateInteractionResponseMessage::new().embed(
                             serenity::CreateEmbed::new()

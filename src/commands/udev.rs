@@ -21,7 +21,7 @@ pub async fn generate_udev(
 ) -> Result<(), Error> {
     let udev = gen_udev(vendor_id, product_id, libinput_override.unwrap_or(true));
 
-    let attachment = CreateAttachment::bytes(udev, "70-opentabletdriver.rules");
+    let attachment = CreateAttachment::bytes(udev.into_bytes(), "70-opentabletdriver.rules");
     let embed = CreateEmbed::new()
         .title("Generated udev rules")
         .description(

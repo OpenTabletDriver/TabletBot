@@ -1,33 +1,33 @@
+use std::borrow::Cow;
+
 use crate::{
     commands::{respond_embed, respond_err, respond_ok},
     structures::{Embeddable, Snippet},
     Context, Error,
 };
-use ::serenity::futures::{Stream, StreamExt};
 use poise::serenity_prelude::{
-    self as serenity, futures, CreateAttachment, CreateEmbed, CreateInteractionResponse,
+    self as serenity, CreateAttachment, CreateEmbed, CreateInteractionResponse,
     CreateInteractionResponseMessage,
 };
 
 #[allow(clippy::unused_async)]
 async fn autocomplete_snippet<'a>(
-    ctx: Context<'a>,
+    ctx: Context<'_>,
     partial: &'a str,
-) -> impl Stream<Item = String> + 'a {
-    let snippet_list: Vec<String> = {
-        ctx.data()
-            .state
-            .read()
-            .unwrap()
-            .snippets
-            .iter()
-            .map(Snippet::format_output)
-            .collect()
-    };
+) -> serenity::CreateAutocompleteResponse<'a> {
+    let snippet_list: Vec<_> = ctx
+        .data()
+        .state
+        .read()
+        .unwrap()
+        .snippets
+        .iter()
+        .map(Snippet::format_output)
+        .filter(|name| name.to_lowercase().contains(&partial.to_lowercase()))
+        .map(serenity::AutocompleteChoice::from)
+        .collect();
 
-    futures::stream::iter(snippet_list).filter(move |name| {
-        futures::future::ready(name.to_lowercase().contains(&partial.to_lowercase()))
-    })
+    serenity::CreateAutocompleteResponse::new().set_choices(snippet_list)
 }
 
 /// Show a snippet
@@ -284,12 +284,12 @@ async fn remove_snippet_confirm(ctx: &Context<'_>, snippet: &Snippet) -> Result<
     let delete_id = format!("{ctx_id}cancel");
     let cancel_id = format!("{ctx_id}delete");
 
-    let components = serenity::CreateActionRow::Buttons(vec![
+    let components = serenity::CreateActionRow::Buttons(Cow::Owned(vec![
         serenity::CreateButton::new(&cancel_id).label("Cancel"),
         serenity::CreateButton::new(&delete_id)
             .label("Delete")
             .style(serenity::ButtonStyle::Danger),
-    ]);
+    ]));
 
     let builder: poise::CreateReply = poise::CreateReply::default()
         .content(format!(

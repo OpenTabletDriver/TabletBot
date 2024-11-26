@@ -6,16 +6,17 @@ use crate::{
     Context, Error,
 };
 
-use poise::serenity_prelude::{Colour, CreateEmbed, CreateEmbedFooter, EditMessage, Message};
+use poise::serenity_prelude::{
+    self as serenity, Colour, CreateEmbed, CreateEmbedFooter, EditMessage, Message,
+};
 use regex::Regex;
-use serenity::futures::{self, Stream, StreamExt};
 
 #[allow(clippy::unused_async)]
 async fn autocomplete_key<'a>(
     ctx: Context<'a>,
     partial: &'a str,
-) -> impl Stream<Item = String> + 'a {
-    let snippet_list: Vec<String> = {
+) -> serenity::CreateAutocompleteResponse<'a> {
+    let snippet_list: Vec<_> = {
         ctx.data()
             .state
             .read()
@@ -23,11 +24,12 @@ async fn autocomplete_key<'a>(
             .issue_prefixes
             .iter()
             .map(|s| s.0.clone())
+            .filter(|name| name.contains(partial))
+            .map(serenity::AutocompleteChoice::from)
             .collect()
     };
 
-    futures::stream::iter(snippet_list)
-        .filter(move |name| futures::future::ready(name.contains(partial)))
+    serenity::CreateAutocompleteResponse::new().set_choices(snippet_list)
 }
 
 /// Create an embed in the current channel.

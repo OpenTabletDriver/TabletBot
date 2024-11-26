@@ -6,6 +6,8 @@ pub(crate) const ACCENT_COLOUR: Colour = Colour(0x8957e5);
 pub(crate) const OK_COLOUR: Colour = Colour(0x2ecc71);
 pub(crate) const ERROR_COLOUR: Colour = Colour(0xe74c3c);
 
+use std::borrow::Cow;
+
 use to_arraystring::ToArrayString;
 
 use crate::{Context, Error};
@@ -96,10 +98,10 @@ pub async fn paginate_lists(
 
     let colour = Colour::TEAL;
 
-    let components = CreateActionRow::Buttons(vec![
+    let components = CreateActionRow::Buttons(Cow::Owned(vec![
         CreateButton::new(&*prev_button_id).emoji('◀'),
         CreateButton::new(&*next_button_id).emoji('▶'),
-    ]);
+    ]));
     let mut current_page = 0;
 
     // Don't paginate if its one page.

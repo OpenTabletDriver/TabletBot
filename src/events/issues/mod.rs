@@ -1,4 +1,4 @@
-use std::{sync::OnceLock, time::Duration};
+use std::{borrow::Cow, sync::OnceLock, time::Duration};
 
 use crate::{commands::interaction_err, structures::Embeddable, Data, FrameworkContext};
 
@@ -50,16 +50,16 @@ pub async fn message(framework: FrameworkContext<'_>, message: &Message) {
     let remove_id = aformat!("{ctx_id}delete");
     let hide_body_id = aformat!("{ctx_id}hide_body");
 
-    let remove = CreateActionRow::Buttons(vec![CreateButton::new(&*remove_id)
+    let remove = CreateActionRow::Buttons(Cow::Owned(vec![CreateButton::new(&*remove_id)
         .label("delete")
-        .style(ButtonStyle::Danger)]);
+        .style(ButtonStyle::Danger)]));
 
-    let components = serenity::CreateActionRow::Buttons(vec![
+    let components = serenity::CreateActionRow::Buttons(Cow::Owned(vec![
         CreateButton::new(&*remove_id)
             .label("delete")
             .style(ButtonStyle::Danger),
         CreateButton::new(&*hide_body_id).label("hide body"),
-    ]);
+    ]));
 
     let content: serenity::CreateMessage = serenity::CreateMessage::default()
         .embeds(embeds)
@@ -75,10 +75,10 @@ pub async fn message(framework: FrameworkContext<'_>, message: &Message) {
         .timeout(Duration::from_secs(60))
         .await
     {
-        let has_perms = press.member.as_ref().map_or(false, |member| {
-            member.permissions.map_or(false, |member_perms| {
-                member_perms.contains(Permissions::MANAGE_MESSAGES)
-            })
+        let has_perms = press.member.as_ref().is_some_and(|member| {
+            member
+                .permissions
+                .is_some_and(|member_perms| member_perms.contains(Permissions::MANAGE_MESSAGES))
         });
 
         // Users who do not own the message or have permissions cannot execute the interactions.

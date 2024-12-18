@@ -199,5 +199,5 @@ async fn issue_embeds(data: &Data, message: &Message) -> Option<Vec<CreateEmbed>
 
 fn get_issue_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
-    REGEX.get_or_init(|| Regex::new(r" ?([a-zA-Z0-9-_.]+)?#([0-9]+) ?").unwrap())
+    REGEX.get_or_init(|| Regex::new(r" ?([a-zA-Z0-9-_.]+)?#([0-9]+)\b").unwrap())
 }

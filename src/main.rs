@@ -11,17 +11,20 @@ pub(crate) mod events;
 pub(crate) mod formatting;
 pub(crate) mod structures;
 
+use std::collections::HashSet;
 use std::sync::RwLock;
 use std::time::Duration;
 use std::{env, sync::Arc};
 
 use octocrab::Octocrab;
-use poise::serenity_prelude::{self as serenity, GatewayIntents};
+use poise::serenity_prelude::{self as serenity, ChannelId, GatewayIntents};
 use structures::BotState;
 
 pub struct Data {
     pub octocrab: Arc<Octocrab>,
     pub state: RwLock<BotState>,
+    /// Small manual cache for threads we have already responded to.
+    pub forum_threads: RwLock<HashSet<ChannelId>>,
 }
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
@@ -119,13 +122,18 @@ async fn main() {
         Box::pin(async move {
             println!("Logged in as {}", ready.user.name);
             poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-            Ok(Data { octocrab, state })
+            Ok(Data {
+                octocrab,
+                state,
+                forum_threads: RwLock::new(HashSet::new()),
+            })
         })
     });
 
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
-        | GatewayIntents::MESSAGE_CONTENT;
+        | GatewayIntents::MESSAGE_CONTENT
+        | GatewayIntents::GUILDS;
 
     let mut client = serenity::Client::builder(discord_token, intents)
         .framework(framework)

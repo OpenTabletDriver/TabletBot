@@ -80,10 +80,10 @@ pub async fn message(data: &Data, ctx: &Context, message: &Message) {
             .timeout(Duration::from_secs(60))
             .await
         {
-            let has_perms = press.member.as_ref().map_or(false, |member| {
-                member.permissions.map_or(false, |member_perms| {
-                    member_perms.contains(Permissions::MANAGE_MESSAGES)
-                })
+            let has_perms = press.member.as_ref().is_some_and(|member| {
+                member
+                    .permissions
+                    .is_some_and(|member_perms| member_perms.contains(Permissions::MANAGE_MESSAGES))
             });
 
             // Users who do not own the message or have permissions cannot execute the interactions.

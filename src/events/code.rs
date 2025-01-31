@@ -6,7 +6,7 @@ use poise::serenity_prelude::{self as serenity, Colour, Context, CreateEmbed, Me
 
 use crate::formatting::trim_indent;
 
-// A shade of purple.
+/// A shade of purple.
 const ACCENT_COLOUR: Colour = Colour::new(0x8957e5);
 
 pub async fn message(ctx: &Context, message: &Message) {
@@ -15,7 +15,8 @@ pub async fn message(ctx: &Context, message: &Message) {
 
         let content = serenity::CreateMessage::default()
             .embeds(embeds)
-            .reference_message(message);
+            .reference_message(message)
+            .allowed_mentions(serenity::CreateAllowedMentions::new().replied_user(false));
         let _ = message.channel_id.send_message(ctx, content).await;
 
         typing.stop();

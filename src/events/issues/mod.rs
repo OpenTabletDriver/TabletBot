@@ -69,7 +69,8 @@ pub async fn message(data: &Data, ctx: &Context, message: &Message) {
         let content: serenity::CreateMessage = serenity::CreateMessage::default()
             .embeds(embeds)
             .reference_message(message)
-            .components(vec![components]);
+            .components(vec![components])
+            .allowed_mentions(serenity::CreateAllowedMentions::new().replied_user(false));
         let msg_result = message.channel_id.send_message(ctx, content).await;
         typing.stop();
 

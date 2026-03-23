@@ -68,6 +68,8 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 
 #[tokio::main]
 async fn main() {
+    let _ = dotenvy::dotenv();
+
     let discord_token = env::var("DISCORD_TOKEN").expect("Expected discord api token");
     let github_token = env::var("GITHUB_TOKEN").expect("Expected github api token");
 

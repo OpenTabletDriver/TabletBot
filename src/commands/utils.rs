@@ -168,7 +168,7 @@ pub async fn edit_embed(
 
             if let Some(description) = description {
                 if description != "_" {
-                    embedb = embedb.description(description);
+                    embedb = embedb.description(description.replace(r"\n", "\n"));
                 }
             } else if let Some(d) = &embed.description {
                 embedb = embedb.description(d);

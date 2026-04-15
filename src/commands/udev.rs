@@ -3,8 +3,8 @@ use crate::{Context, Error};
 
 use std::fmt::Write;
 
-use poise::serenity_prelude::{CreateAttachment, CreateEmbed};
 use poise::CreateReply;
+use poise::serenity_prelude::{CreateAttachment, CreateEmbed};
 
 /// Generates udev rules for the given vendor and product Ids.
 #[poise::command(

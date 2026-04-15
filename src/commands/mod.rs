@@ -11,12 +11,12 @@ use to_arraystring::ToArrayString;
 
 use crate::{Context, Error};
 
+use poise::CreateReply;
 use poise::serenity_prelude::{
     self as serenity, Colour, ComponentInteraction, ComponentInteractionCollector, CreateActionRow,
     CreateButton, CreateEmbed, CreateEmbedFooter, CreateInteractionResponse,
     CreateInteractionResponseMessage,
 };
-use poise::CreateReply;
 
 #[poise::command(prefix_command, hide_in_help)]
 pub async fn register(ctx: Context<'_>) -> Result<(), Error> {

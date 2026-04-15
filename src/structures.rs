@@ -1,7 +1,7 @@
+use poise::serenity_prelude::CreateEmbed;
+use poise::serenity_prelude::prelude::TypeMapKey;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_reader, to_writer_pretty};
-use serenity::builder::CreateEmbed;
-use serenity::prelude::TypeMapKey;
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};

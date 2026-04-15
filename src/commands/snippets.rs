@@ -1,19 +1,18 @@
 use crate::{
+    Context, Error,
     commands::{respond_embed, respond_err, respond_ok},
     structures::{Embeddable, Snippet},
-    Context, Error,
 };
-use ::serenity::futures::{Stream, StreamExt};
 use poise::serenity_prelude::{
-    self as serenity, futures, CreateAttachment, CreateEmbed, CreateInteractionResponse,
-    CreateInteractionResponseMessage,
+    self as serenity, AutocompleteChoice, CreateAttachment, CreateAutocompleteResponse,
+    CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage,
 };
 
 #[allow(clippy::unused_async)]
 async fn autocomplete_snippet<'a>(
     ctx: Context<'a>,
     partial: &'a str,
-) -> impl Stream<Item = String> + 'a {
+) -> CreateAutocompleteResponse {
     let snippet_list: Vec<String> = {
         ctx.data()
             .state
@@ -25,9 +24,13 @@ async fn autocomplete_snippet<'a>(
             .collect()
     };
 
-    futures::stream::iter(snippet_list).filter(move |name| {
-        futures::future::ready(name.to_lowercase().contains(&partial.to_lowercase()))
-    })
+    CreateAutocompleteResponse::new().set_choices(
+        snippet_list
+            .iter()
+            .filter(|name| name.to_lowercase().contains(&partial.to_lowercase()))
+            .map(|name| AutocompleteChoice::new(name, name.to_string()))
+            .collect(),
+    )
 }
 
 /// Show a snippet

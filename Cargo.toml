@@ -4,7 +4,7 @@
 name = "tabletbot"
 version = "1.0.0"
 authors = [ "InfinityGhost" ]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 # Serialization
@@ -12,8 +12,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 
 # Discord API
-poise = "0.6"
-serenity = "0.12"
+poise = { git = "https://github.com/serenity-rs/poise", branch = "next" }
+serenity = { git = "https://github.com/serenity-rs/serenity", branch = "next" }
 tokio = { version = "1.29.1", features = ["macros", "signal", "rt-multi-thread"] }
 
 # Misc

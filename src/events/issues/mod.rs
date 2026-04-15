@@ -1,6 +1,6 @@
 use std::{sync::OnceLock, time::Duration};
 
-use crate::{commands::interaction_err, structures::Embeddable, Data};
+use crate::{Data, commands::interaction_err, structures::Embeddable};
 
 use arrayvec::ArrayString;
 use poise::serenity_prelude::{
@@ -55,9 +55,11 @@ pub async fn message(data: &Data, ctx: &Context, message: &Message) {
         hide_body_id.push_str(&ctx_id);
         hide_body_id.push_str("hide_body");
 
-        let remove = CreateActionRow::Buttons(vec![CreateButton::new(&*remove_id)
-            .label("delete")
-            .style(ButtonStyle::Danger)]);
+        let remove = CreateActionRow::Buttons(vec![
+            CreateButton::new(&*remove_id)
+                .label("delete")
+                .style(ButtonStyle::Danger),
+        ]);
 
         let components = serenity::CreateActionRow::Buttons(vec![
             CreateButton::new(&*remove_id)

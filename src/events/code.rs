@@ -79,7 +79,7 @@ struct FileReference<'a> {
 }
 
 impl FileReference<'_> {
-    pub fn try_from_str(text: &str) -> Option<Vec<FileReference>> {
+    pub fn try_from_str(text: &str) -> Option<Vec<FileReference<'_>>> {
         let r = get_file_reference_regex();
 
         let files: Vec<FileReference> = r
@@ -94,11 +94,7 @@ impl FileReference<'_> {
             })
             .collect();
 
-        if files.is_empty() {
-            None
-        } else {
-            Some(files)
-        }
+        if files.is_empty() { None } else { Some(files) }
     }
 
     pub async fn create_embed(&self) -> Option<CreateEmbed> {

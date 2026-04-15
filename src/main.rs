@@ -111,8 +111,12 @@ async fn main() {
         },
 
         skip_checks_for_owners: false,
-        event_handler: |ctx, event: &serenity::FullEvent, framework, data| {
-            Box::pin(events::event_handler(ctx, event, framework, data))
+        event_handler: |ctx, event: &serenity::FullEvent| {
+            Box::pin(events::event_handler(
+                ctx.serenity_context,
+                event,
+                ctx.user_data,
+            ))
         },
         ..Default::default()
     };
@@ -129,7 +133,9 @@ async fn main() {
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT;
 
-    let mut client = serenity::Client::builder(discord_token, intents)
+    let http = serenity::Http::new(&discord_token);
+
+    let mut client = serenity::ClientBuilder::new_with_http(http, intents)
         .framework(framework)
         .await
         .unwrap();

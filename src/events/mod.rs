@@ -8,7 +8,6 @@ pub mod issues;
 pub async fn event_handler(
     ctx: &serenity::Context,
     event: &serenity::FullEvent,
-    _framework: poise::FrameworkContext<'_, Data, Error>,
     data: &Data,
 ) -> Result<(), Error> {
     #[allow(clippy::single_match)]

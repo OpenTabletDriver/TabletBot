@@ -154,10 +154,13 @@ pub async fn edit_embed(
             "I am not the author of the specified message!",
         )
         .await;
+        return Ok(());
     }
 
-    if let Some(interaction) = message.interaction {
-        if interaction.name == "embed" {
+    if let Some(interaction) = message.interaction_metadata
+        && let MessageInteractionMetadata::Command(_) = *interaction
+    {
+        if !message.embeds.is_empty() {
             // Embed for checking reasons.
             let embed = &message.embeds[0];
             let mut embedb = CreateEmbed::default();

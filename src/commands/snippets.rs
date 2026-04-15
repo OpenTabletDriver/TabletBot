@@ -144,15 +144,16 @@ pub async fn remove_snippet(
     ctx: Context<'_>,
     #[autocomplete = "autocomplete_snippet"]
     #[description = "The snippet's id"]
-    id: String,
+    #[rename = "id"]
+    id_and_title: String,
 ) -> Result<(), Error> {
-    match get_snippet_lazy(&ctx, &id) {
+    match get_snippet(&ctx, &id_and_title) {
         Some(snippet) => {
             remove_snippet_confirm(&ctx, &snippet).await?;
         }
         None => {
             let title = &"Failed to remove snippet";
-            let content = &&format!("The snippet '{id}' does not exist");
+            let content = &&format!("The snippet '{id_and_title}' does not exist");
             respond_err(&ctx, title, content).await;
         }
     }

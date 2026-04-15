@@ -102,11 +102,12 @@ pub async fn edit_snippet(
     ctx: Context<'_>,
     #[autocomplete = "autocomplete_snippet"]
     #[description = "The snippet's id"]
-    id: String,
+    #[rename = "id"]
+    id_and_title: String,
     #[description = "The snippet's title"] title: Option<String>,
     #[description = "The snippet's content"] content: Option<String>,
 ) -> Result<(), Error> {
-    match get_snippet_lazy(&ctx, &id) {
+    match get_snippet(&ctx, &id_and_title) {
         Some(mut snippet) => {
             if let Some(title) = title {
                 snippet.title = title;
@@ -118,7 +119,8 @@ pub async fn edit_snippet(
 
             {
                 let mut rwlock_guard = ctx.data().state.write().unwrap();
-                rwlock_guard.snippets.push(snippet.clone());
+                let editing_snippet = rwlock_guard.snippets.iter_mut().find(|s| s.format_output().eq(&id_and_title)).unwrap();
+                *editing_snippet = snippet.clone();
                 println!("Snippet edited '{}: {}'", snippet.title, snippet.content);
                 rwlock_guard.write();
             }
@@ -128,7 +130,7 @@ pub async fn edit_snippet(
         }
         None => {
             let title = &"Failed to edit snippet";
-            let content = &&format!("The snippet '{id}' does not exist");
+            let content = &&format!("The snippet '{id_and_title}' does not exist");
             respond_err(&ctx, title, content).await;
         }
     };
@@ -234,7 +236,7 @@ impl Embeddable for Snippet {
 }
 
 // Exact matches the snippet id and name.
-fn _get_snippet(ctx: &Context<'_>, id: &str) -> Option<Snippet> {
+fn get_snippet(ctx: &Context<'_>, id: &str) -> Option<Snippet> {
     let data = ctx.data();
     let rwlock_guard = data.state.read().unwrap();
 

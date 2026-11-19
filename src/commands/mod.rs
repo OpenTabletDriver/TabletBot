@@ -137,7 +137,7 @@ pub async fn paginate_lists(
     if pages.len() > 1 {
         while let Some(press) = ComponentInteractionCollector::new(ctx)
             .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
-            .timeout(std::time::Duration::from_secs(180))
+            .timeout(std::time::Duration::from_mins(3))
             .await
         {
             match Kind::from_id(&press.data.custom_id, &ctx_id) {

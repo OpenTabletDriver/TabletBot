@@ -144,15 +144,15 @@ impl Document for PullRequest {
     }
 
     fn get_labels(&self) -> Option<String> {
-        if let Some(labels) = &self.labels {
-            if !labels.is_empty() {
-                let labels = labels
-                    .iter()
-                    .map(|l| l.name.clone())
-                    .collect::<Vec<String>>();
+        if let Some(labels) = &self.labels
+            && !labels.is_empty()
+        {
+            let labels = labels
+                .iter()
+                .map(|l| l.name.clone())
+                .collect::<Vec<String>>();
 
-                return Some(format!("`{}`", labels.join("`, `")));
-            }
+            return Some(format!("`{}`", labels.join("`, `")));
         }
 
         None

@@ -98,7 +98,7 @@ async fn main() {
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("!".into()),
             edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
-                Duration::from_secs(600),
+                Duration::from_mins(10),
             ))),
             ..Default::default()
         },

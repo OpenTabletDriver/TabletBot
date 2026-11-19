@@ -60,10 +60,10 @@ async fn http_get_body_text(url: &String) -> Option<String> {
 }
 
 fn try_parse<F: FromStr + Clone>(m: Option<Match>) -> Option<F> {
-    if let Some(m) = m {
-        if let Ok(f) = m.as_str().parse::<F>() {
-            return Some(f.to_owned());
-        }
+    if let Some(m) = m
+        && let Ok(f) = m.as_str().parse::<F>()
+    {
+        return Some(f.to_owned());
     }
 
     None

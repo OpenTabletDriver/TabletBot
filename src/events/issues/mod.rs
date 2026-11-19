@@ -79,13 +79,13 @@ pub async fn message(data: &Data, ctx: &Context, message: &Message) {
         let mut body_hid = false;
         while let Some(press) = serenity::ComponentInteractionCollector::new(ctx)
             .filter(move |press| press.data.custom_id.starts_with(&*ctx_id))
-            .timeout(Duration::from_secs(60))
+            .timeout(Duration::from_mins(1))
             .await
         {
-            let has_perms = press.member.as_ref().map_or(false, |member| {
-                member.permissions.map_or(false, |member_perms| {
-                    member_perms.contains(Permissions::MANAGE_MESSAGES)
-                })
+            let has_perms = press.member.as_ref().is_some_and(|member| {
+                member
+                    .permissions
+                    .is_some_and(|member_perms| member_perms.contains(Permissions::MANAGE_MESSAGES))
             });
 
             // Users who do not own the message or have permissions cannot execute the interactions.
@@ -139,12 +139,10 @@ pub async fn message(data: &Data, ctx: &Context, message: &Message) {
         }
 
         // Triggers on timeout.
-        if !msg_deleted {
-            if let Ok(mut msg) = msg_result {
-                let _ = msg
-                    .edit(ctx, serenity::EditMessage::default().components(vec![]))
-                    .await;
-            }
+        if !msg_deleted && let Ok(mut msg) = msg_result {
+            let _ = msg
+                .edit(ctx, serenity::EditMessage::default().components(vec![]))
+                .await;
         }
     }
 }
@@ -174,7 +172,7 @@ async fn issue_embeds(data: &Data, message: &Message) -> Option<Vec<CreateEmbed>
                     prs = client.pulls(owner, repo);
                 } else {
                     continue; // discards when it doesn't match a repo.
-                };
+                }
             }
 
             let ratelimit = ratelimit

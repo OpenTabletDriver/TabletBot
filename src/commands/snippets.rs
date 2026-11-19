@@ -28,7 +28,7 @@ async fn autocomplete_snippet<'a>(
         snippet_list
             .iter()
             .filter(|name| name.to_lowercase().contains(&partial.to_lowercase()))
-            .map(|name| AutocompleteChoice::new(name, name.to_string()))
+            .map(|name| AutocompleteChoice::new(name, name.clone()))
             .collect(),
     )
 }
@@ -134,7 +134,7 @@ pub async fn edit_snippet(
             let content = &&format!("The snippet '{id}' does not exist");
             respond_err(&ctx, title, content).await;
         }
-    };
+    }
 
     Ok(())
 }
@@ -302,7 +302,7 @@ async fn remove_snippet_confirm(ctx: &Context<'_>, snippet: &Snippet) -> Result<
 
     while let Some(press) = serenity::ComponentInteractionCollector::new(ctx)
         .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_mins(1))
         .await
     {
         if press.data.custom_id == delete_id {

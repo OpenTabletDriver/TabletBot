@@ -29,7 +29,7 @@ async fn autocomplete_key<'a>(ctx: Context<'a>, partial: &'a str) -> CreateAutoc
         snippet_list
             .iter()
             .filter(|name| name.contains(partial))
-            .map(|name| AutocompleteChoice::new(name, name.to_string()))
+            .map(|name| AutocompleteChoice::new(name, name.clone()))
             .collect(),
     )
 }
@@ -265,7 +265,7 @@ pub async fn edit_embed(
             "This message is not an interaction!",
         )
         .await;
-    };
+    }
 
     Ok(())
 }
@@ -353,7 +353,7 @@ pub async fn remove_repo(
             let content = format!("The key '{key}' does not exist.");
             respond_err(&ctx, title, &content).await;
         }
-    };
+    }
 
     Ok(())
 }

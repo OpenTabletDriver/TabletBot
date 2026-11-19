@@ -284,12 +284,14 @@ async fn remove_snippet_confirm(ctx: &Context<'_>, snippet: &Snippet) -> Result<
     let delete_id = format!("{ctx_id}cancel");
     let cancel_id = format!("{ctx_id}delete");
 
-    let components = serenity::CreateActionRow::Buttons(Cow::Owned(vec![
-        serenity::CreateButton::new(&cancel_id).label("Cancel"),
-        serenity::CreateButton::new(&delete_id)
-            .label("Delete")
-            .style(serenity::ButtonStyle::Danger),
-    ]));
+    let components = serenity::CreateComponent::ActionRow(
+        serenity::CreateActionRow::Buttons(Cow::Owned(vec![
+            serenity::CreateButton::new(&cancel_id).label("Cancel"),
+            serenity::CreateButton::new(&delete_id)
+                .label("Delete")
+                .style(serenity::ButtonStyle::Danger),
+        ]))
+    );
 
     let builder: poise::CreateReply = poise::CreateReply::default()
         .content(format!(
@@ -303,7 +305,7 @@ async fn remove_snippet_confirm(ctx: &Context<'_>, snippet: &Snippet) -> Result<
     ctx.send(builder).await?;
 
     while let Some(press) =
-        serenity::ComponentInteractionCollector::new(ctx.serenity_context().shard.clone())
+        serenity::ComponentInteractionCollector::new(ctx.serenity_context())
             .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
             .timeout(std::time::Duration::from_secs(60))
             .await

@@ -50,16 +50,20 @@ pub async fn message(framework: FrameworkContext<'_>, message: &Message) {
     let remove_id = aformat!("{ctx_id}delete");
     let hide_body_id = aformat!("{ctx_id}hide_body");
 
-    let remove = CreateActionRow::Buttons(Cow::Owned(vec![CreateButton::new(&*remove_id)
+    let remove = serenity::CreateComponent::ActionRow(
+        CreateActionRow::Buttons(Cow::Owned(vec![CreateButton::new(&*remove_id)
         .label("delete")
-        .style(ButtonStyle::Danger)]));
+        .style(ButtonStyle::Danger)]))
+    );
 
-    let components = serenity::CreateActionRow::Buttons(Cow::Owned(vec![
-        CreateButton::new(&*remove_id)
-            .label("delete")
-            .style(ButtonStyle::Danger),
-        CreateButton::new(&*hide_body_id).label("hide body"),
-    ]));
+    let components = serenity::CreateComponent::ActionRow(
+        serenity::CreateActionRow::Buttons(Cow::Owned(vec![
+            CreateButton::new(&*remove_id)
+                .label("delete")
+                .style(ButtonStyle::Danger),
+            CreateButton::new(&*hide_body_id).label("hide body"),
+        ]))
+    );
 
     let content: serenity::CreateMessage = serenity::CreateMessage::default()
         .embeds(embeds)
@@ -70,7 +74,7 @@ pub async fn message(framework: FrameworkContext<'_>, message: &Message) {
 
     let mut msg_deleted = false;
     let mut body_hid = false;
-    while let Some(press) = serenity::ComponentInteractionCollector::new(ctx.shard.clone())
+    while let Some(press) = serenity::ComponentInteractionCollector::new(ctx)
         .filter(move |press| press.data.custom_id.starts_with(&*ctx_id))
         .timeout(Duration::from_secs(60))
         .await

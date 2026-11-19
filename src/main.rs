@@ -131,7 +131,7 @@ async fn main() {
         | GatewayIntents::MESSAGE_CONTENT;
 
     let mut client = serenity::Client::builder(discord_token, intents)
-        .framework(framework)
+        .framework(Box::new(framework))
         .data(Arc::new(data))
         .await
         .unwrap();

@@ -12,13 +12,13 @@ pub async fn event_handler(
     event: &serenity::FullEvent,
 ) -> Result<(), Error> {
     match event {
-        serenity::FullEvent::Message { new_message } => {
+        serenity::FullEvent::Message { new_message , .. } => {
             if !new_message.author.bot() && new_message.guild_id.is_some() {
                 issues::message(framework, new_message).await;
                 code::message(framework, new_message).await;
             }
         }
-        serenity::FullEvent::Ready { data_about_bot } => {
+        serenity::FullEvent::Ready { data_about_bot , .. } => {
             if !framework
                 .user_data()
                 .has_started

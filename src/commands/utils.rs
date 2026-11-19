@@ -96,7 +96,7 @@ pub async fn embed(
         embed = embed.description(description.replace(r"\n", "\n"));
     }
     if let Some(image) = image {
-        embed = embed.image(image);
+        embed = embed.image(image, None);
     }
 
     if let Some(footer) = footer {
@@ -104,7 +104,7 @@ pub async fn embed(
     }
 
     if let Some(thumbnail) = thumbnail {
-        embed = embed.thumbnail(thumbnail);
+        embed = embed.thumbnail(thumbnail, None);
     }
 
     if let Some(color) = color {
@@ -207,10 +207,10 @@ pub async fn edit_embed(
 
             if let Some(image) = image {
                 if image != "_" {
-                    embedb = embedb.image(image);
+                    embedb = embedb.image(image, None);
                 }
             } else if let Some(i) = &embed.image {
-                embedb = embedb.image(i.url.clone());
+                embedb = embedb.image(i.url.clone(), None);
             }
 
             if let Some(footer) = footer {
@@ -223,10 +223,10 @@ pub async fn edit_embed(
 
             if let Some(thumbnail) = thumbnail {
                 if thumbnail != "_" {
-                    embedb = embedb.thumbnail(thumbnail);
+                    embedb = embedb.thumbnail(thumbnail, None);
                 }
             } else if let Some(t) = &embed.thumbnail {
-                embedb = embedb.thumbnail(t.url.clone());
+                embedb = embedb.thumbnail(t.url.clone(), None);
             }
 
             let builder = EditMessage::default().embed(embedb);

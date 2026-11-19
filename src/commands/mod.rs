@@ -98,10 +98,12 @@ pub async fn paginate_lists(
 
     let colour = Colour::TEAL;
 
-    let components = CreateActionRow::Buttons(Cow::Owned(vec![
-        CreateButton::new(&*prev_button_id).emoji('◀'),
-        CreateButton::new(&*next_button_id).emoji('▶'),
-    ]));
+    let components = serenity::CreateComponent::ActionRow(
+        CreateActionRow::Buttons(Cow::Owned(vec![
+            CreateButton::new(&*prev_button_id).emoji('◀'),
+            CreateButton::new(&*next_button_id).emoji('▶'),
+        ]))
+    );
     let mut current_page = 0;
 
     // Don't paginate if its one page.
@@ -132,7 +134,7 @@ pub async fn paginate_lists(
 
     if pages.len() > 1 {
         while let Some(press) =
-            ComponentInteractionCollector::new(ctx.serenity_context().shard.clone())
+            ComponentInteractionCollector::new(ctx.serenity_context())
                 .filter(move |press| press.data.custom_id.starts_with(ctx_id.as_str()))
                 .timeout(std::time::Duration::from_secs(180))
                 .await

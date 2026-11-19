@@ -4,7 +4,7 @@
 name = "tabletbot"
 version = "1.0.0"
 authors = [ "InfinityGhost" ]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 # Serialization

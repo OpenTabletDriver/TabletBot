@@ -1,33 +1,33 @@
+use std::borrow::Cow;
+
 use crate::{
+    Context, Error,
     commands::{respond_embed, respond_err, respond_ok},
     structures::{Embeddable, Snippet},
-    Context, Error,
 };
-use ::serenity::futures::{Stream, StreamExt};
 use poise::serenity_prelude::{
-    self as serenity, futures, CreateAttachment, CreateEmbed, CreateInteractionResponse,
+    self as serenity, CreateAttachment, CreateEmbed, CreateInteractionResponse,
     CreateInteractionResponseMessage,
 };
 
 #[allow(clippy::unused_async)]
 async fn autocomplete_snippet<'a>(
-    ctx: Context<'a>,
+    ctx: Context<'_>,
     partial: &'a str,
-) -> impl Stream<Item = String> + 'a {
-    let snippet_list: Vec<String> = {
-        ctx.data()
-            .state
-            .read()
-            .unwrap()
-            .snippets
-            .iter()
-            .map(Snippet::format_output)
-            .collect()
-    };
+) -> serenity::CreateAutocompleteResponse<'a> {
+    let snippet_list: Vec<_> = ctx
+        .data()
+        .state
+        .read()
+        .unwrap()
+        .snippets
+        .iter()
+        .map(Snippet::format_output)
+        .filter(|name| name.to_lowercase().contains(&partial.to_lowercase()))
+        .map(serenity::AutocompleteChoice::from)
+        .collect();
 
-    futures::stream::iter(snippet_list).filter(move |name| {
-        futures::future::ready(name.to_lowercase().contains(&partial.to_lowercase()))
-    })
+    serenity::CreateAutocompleteResponse::new().set_choices(snippet_list)
 }
 
 /// Show a snippet
@@ -66,29 +66,29 @@ pub async fn create_snippet(
     #[description = "The snippet's title"] title: String,
     #[description = "The snippet's content"] content: String,
 ) -> Result<(), Error> {
+    let snippet = Snippet {
+        id: id.clone(),
+        title,
+        content: content.replace(r"\n", "\n"),
+    };
+
+    let mut embed = snippet.embed();
+    embed = embed.colour(super::OK_COLOUR);
+
     let embed = {
-        let mut rwlock_guard = ctx.data().state.write().unwrap();
+        let data = ctx.data();
+        let mut rwlock_guard = data.state.write().unwrap();
 
         if let Some(position) = rwlock_guard.snippets.iter().position(|s| s.id.eq(&id)) {
             rwlock_guard.snippets.remove(position);
         }
 
-        let snippet = Snippet {
-            id,
-            title,
-            content: content.replace(r"\n", "\n"),
-        };
-
         println!("New snippet created '{}: {}'", snippet.id, snippet.title);
 
-        let mut embed = snippet.embed();
-
-        embed = embed.colour(super::OK_COLOUR);
-
-        rwlock_guard.snippets.push(snippet);
+        rwlock_guard.snippets.push(snippet.clone());
         rwlock_guard.write();
 
-        embed
+        embed.clone()
     };
 
     respond_embed(&ctx, embed, false).await;
@@ -118,9 +118,9 @@ pub async fn edit_snippet(
             }
 
             {
-                let mut rwlock_guard = ctx.data().state.write().unwrap();
-                let editing_snippet = rwlock_guard.snippets.iter_mut().find(|s| s.format_output().eq(&id_and_title)).unwrap();
-                *editing_snippet = snippet.clone();
+                let data = ctx.data();
+                let mut rwlock_guard = data.state.write().unwrap();
+                rwlock_guard.snippets.push(snippet.clone());
                 println!("Snippet edited '{}: {}'", snippet.title, snippet.content);
                 rwlock_guard.write();
             }
@@ -133,7 +133,7 @@ pub async fn edit_snippet(
             let content = &&format!("The snippet '{id_and_title}' does not exist");
             respond_err(&ctx, title, content).await;
         }
-    };
+    }
 
     Ok(())
 }
@@ -209,8 +209,10 @@ pub async fn export_snippet(
 ) -> Result<(), Error> {
     match get_snippet_lazy(&ctx, &id) {
         Some(snippet) => {
-            let attachment =
-                CreateAttachment::bytes(snippet.content.replace('\n', r"\n"), "snippet.txt");
+            let attachment = CreateAttachment::bytes(
+                snippet.content.replace('\n', r"\n").into_bytes(),
+                "snippet.txt",
+            );
             let message = poise::CreateReply::default()
                 .attachment(attachment)
                 .embed(snippet.embed());
@@ -227,7 +229,7 @@ pub async fn export_snippet(
 }
 
 impl Embeddable for Snippet {
-    fn embed(&self) -> CreateEmbed {
+    fn embed(&self) -> CreateEmbed<'_> {
         CreateEmbed::default()
             .title(&self.title)
             .description(&self.content)
@@ -282,12 +284,13 @@ async fn remove_snippet_confirm(ctx: &Context<'_>, snippet: &Snippet) -> Result<
     let delete_id = format!("{ctx_id}cancel");
     let cancel_id = format!("{ctx_id}delete");
 
-    let components = serenity::CreateActionRow::Buttons(vec![
-        serenity::CreateButton::new(&cancel_id).label("Cancel"),
-        serenity::CreateButton::new(&delete_id)
-            .label("Delete")
-            .style(serenity::ButtonStyle::Danger),
-    ]);
+    let components =
+        serenity::CreateComponent::ActionRow(serenity::CreateActionRow::Buttons(Cow::Owned(vec![
+            serenity::CreateButton::new(&cancel_id).label("Cancel"),
+            serenity::CreateButton::new(&delete_id)
+                .label("Delete")
+                .style(serenity::ButtonStyle::Danger),
+        ])));
 
     let builder: poise::CreateReply = poise::CreateReply::default()
         .content(format!(
@@ -300,9 +303,9 @@ async fn remove_snippet_confirm(ctx: &Context<'_>, snippet: &Snippet) -> Result<
 
     ctx.send(builder).await?;
 
-    while let Some(press) = serenity::ComponentInteractionCollector::new(ctx)
+    while let Some(press) = serenity::ComponentInteractionCollector::new(ctx.serenity_context())
         .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_mins(1))
         .await
     {
         if press.data.custom_id == delete_id {
@@ -323,7 +326,7 @@ async fn handle_delete(
     rm_snippet(ctx, snippet);
     interaction
         .create_response(
-            ctx,
+            ctx.http(),
             CreateInteractionResponse::UpdateMessage(
                 CreateInteractionResponseMessage::new()
                     .content("Deleted!")
@@ -346,7 +349,7 @@ async fn handle_cancel(
 ) -> Result<(), Error> {
     interaction
         .create_response(
-            ctx,
+            ctx.http(),
             CreateInteractionResponse::UpdateMessage(
                 CreateInteractionResponseMessage::new()
                     .content("Aborted.")
@@ -356,4 +359,16 @@ async fn handle_cancel(
         )
         .await?;
     Ok(())
+}
+
+#[must_use]
+pub fn commands() -> [crate::Command; 6] {
+    [
+        snippet(),
+        create_snippet(),
+        remove_snippet(),
+        export_snippet(),
+        list_snippets(),
+        edit_snippet(),
+    ]
 }

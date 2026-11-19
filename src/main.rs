@@ -19,16 +19,19 @@ use octocrab::Octocrab;
 use poise::serenity_prelude::{self as serenity, GatewayIntents};
 use structures::BotState;
 
+use std::sync::atomic::AtomicBool;
+
 pub struct Data {
-    pub octocrab: Arc<Octocrab>,
+    pub has_started: AtomicBool,
+    pub octocrab: Octocrab,
     pub state: RwLock<BotState>,
 }
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
+type Command = poise::Command<Data, Error>;
 
 async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
     match error {
-        poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {error:?}"),
         poise::FrameworkError::Command { ctx, error, .. } => {
             let error = error.to_string();
             eprintln!("An error occured in a command: {error}");
@@ -70,35 +73,22 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 async fn main() {
     let _ = dotenvy::dotenv();
 
-    let discord_token = env::var("DISCORD_TOKEN").expect("Expected discord api token");
+    let discord_token =
+        serenity::Token::from_env("DISCORD_TOKEN").expect("Expected discord api token");
     let github_token = env::var("GITHUB_TOKEN").expect("Expected github api token");
 
     let octo_builder = Octocrab::builder().personal_token(github_token);
 
-    let octocrab = octocrab::initialise(octo_builder).expect("Failed to build github client");
+    let octocrab = octo_builder.build().expect("Failed to build github client");
 
     let state = RwLock::new(BotState::read());
 
     let options = poise::FrameworkOptions {
-        commands: vec![
-            commands::register(),
-            commands::snippets::snippet(),
-            commands::snippets::create_snippet(),
-            commands::snippets::remove_snippet(),
-            commands::snippets::export_snippet(),
-            commands::snippets::list_snippets(),
-            commands::snippets::edit_snippet(),
-            commands::utils::embed(),
-            commands::utils::edit_embed(),
-            commands::utils::add_repo(),
-            commands::utils::remove_repo(),
-            commands::utils::list_repos(),
-            commands::udev::generate_udev(),
-        ],
+        commands: commands::commands(),
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("!".into()),
             edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
-                Duration::from_secs(600),
+                Duration::from_mins(10),
             ))),
             ..Default::default()
         },
@@ -111,26 +101,25 @@ async fn main() {
         },
 
         skip_checks_for_owners: false,
-        event_handler: |ctx, event: &serenity::FullEvent, framework, data| {
-            Box::pin(events::event_handler(ctx, event, framework, data))
-        },
         ..Default::default()
     };
 
-    let framework = poise::Framework::new(options, move |ctx, ready, framework| {
-        Box::pin(async move {
-            println!("Logged in as {}", ready.user.name);
-            poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-            Ok(Data { octocrab, state })
-        })
-    });
+    let data = Data {
+        has_started: AtomicBool::new(false),
+        octocrab,
+        state,
+    };
+
+    let framework = poise::Framework::new(options);
 
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT;
 
     let mut client = serenity::Client::builder(discord_token, intents)
-        .framework(framework)
+        .event_handler(Arc::new(events::Handler))
+        .framework(Box::new(framework))
+        .data(Arc::new(data))
         .await
         .unwrap();
 

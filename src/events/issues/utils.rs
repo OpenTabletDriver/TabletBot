@@ -16,11 +16,11 @@ pub(super) trait Document {
 }
 
 impl Embeddable for Issue {
-    fn embed(&self) -> CreateEmbed {
+    fn embed(&self) -> CreateEmbed<'_> {
         let default = CreateEmbed::default();
         let author = CreateEmbedAuthor::new(&self.user.login)
-            .url(self.user.url.clone())
-            .icon_url(self.user.avatar_url.clone());
+            .url(self.user.url.as_str())
+            .icon_url(self.user.avatar_url.as_str());
         let mut embed = default
             .title(self.get_title())
             .description(self.get_content())
@@ -80,7 +80,7 @@ impl Document for Issue {
 }
 
 impl Embeddable for PullRequest {
-    fn embed(&self) -> CreateEmbed {
+    fn embed(&self) -> CreateEmbed<'_> {
         let mut description = self.body.clone().unwrap_or_default();
         description.shrink_to(4096);
 
@@ -92,8 +92,8 @@ impl Embeddable for PullRequest {
 
         if let Some(user) = &self.user {
             let author = CreateEmbedAuthor::new(user.login.clone())
-                .url(user.url.clone())
-                .icon_url(user.avatar_url.clone());
+                .url(user.url.as_str())
+                .icon_url(user.avatar_url.as_str());
             embed = embed.author(author);
         }
 
@@ -144,15 +144,15 @@ impl Document for PullRequest {
     }
 
     fn get_labels(&self) -> Option<String> {
-        if let Some(labels) = &self.labels {
-            if !labels.is_empty() {
-                let labels = labels
-                    .iter()
-                    .map(|l| l.name.clone())
-                    .collect::<Vec<String>>();
+        if let Some(labels) = &self.labels
+            && !labels.is_empty()
+        {
+            let labels = labels
+                .iter()
+                .map(|l| l.name.clone())
+                .collect::<Vec<String>>();
 
-                return Some(format!("`{}`", labels.join("`, `")));
-            }
+            return Some(format!("`{}`", labels.join("`, `")));
         }
 
         None

@@ -1,21 +1,22 @@
 use std::sync::OnceLock;
 
 use crate::{
+    Context, Error,
     commands::{respond_embed, respond_err, respond_ok},
     structures::RepositoryDetails,
-    Context, Error,
 };
 
-use poise::serenity_prelude::{Colour, CreateEmbed, CreateEmbedFooter, EditMessage, Message};
+use poise::serenity_prelude::{
+    self as serenity, Colour, CreateEmbed, CreateEmbedFooter, EditMessage, Message,
+};
 use regex::Regex;
-use serenity::futures::{self, Stream, StreamExt};
 
 #[allow(clippy::unused_async)]
 async fn autocomplete_key<'a>(
     ctx: Context<'a>,
     partial: &'a str,
-) -> impl Stream<Item = String> + 'a {
-    let snippet_list: Vec<String> = {
+) -> serenity::CreateAutocompleteResponse<'a> {
+    let snippet_list: Vec<_> = {
         ctx.data()
             .state
             .read()
@@ -23,11 +24,12 @@ async fn autocomplete_key<'a>(
             .issue_prefixes
             .iter()
             .map(|s| s.0.clone())
+            .filter(|name| name.contains(partial))
+            .map(serenity::AutocompleteChoice::from)
             .collect()
     };
 
-    futures::stream::iter(snippet_list)
-        .filter(move |name| futures::future::ready(name.contains(partial)))
+    serenity::CreateAutocompleteResponse::new().set_choices(snippet_list)
 }
 
 /// Create an embed in the current channel.
@@ -94,7 +96,7 @@ pub async fn embed(
         embed = embed.description(description.replace(r"\n", "\n"));
     }
     if let Some(image) = image {
-        embed = embed.image(image);
+        embed = embed.image(image, None);
     }
 
     if let Some(footer) = footer {
@@ -102,7 +104,7 @@ pub async fn embed(
     }
 
     if let Some(thumbnail) = thumbnail {
-        embed = embed.thumbnail(thumbnail);
+        embed = embed.thumbnail(thumbnail, None);
     }
 
     if let Some(color) = color {
@@ -163,7 +165,7 @@ pub async fn edit_embed(
                     embedb = embedb.title(title);
                 }
             } else if let Some(t) = &embed.title {
-                embedb = embedb.title(t);
+                embedb = embedb.title(t.as_str());
             }
 
             if let Some(description) = description {
@@ -171,7 +173,7 @@ pub async fn edit_embed(
                     embedb = embedb.description(description.replace(r"\n", "\n"));
                 }
             } else if let Some(d) = &embed.description {
-                embedb = embedb.description(d);
+                embedb = embedb.description(d.as_str());
             }
 
             if let Some(color) = color {
@@ -200,15 +202,15 @@ pub async fn edit_embed(
                     embedb = embedb.url(url);
                 }
             } else if let Some(u) = &embed.url {
-                embedb = embedb.url(u);
+                embedb = embedb.url(u.as_str());
             }
 
             if let Some(image) = image {
                 if image != "_" {
-                    embedb = embedb.image(image);
+                    embedb = embedb.image(image, None);
                 }
             } else if let Some(i) = &embed.image {
-                embedb = embedb.image(i.url.clone());
+                embedb = embedb.image(i.url.clone(), None);
             }
 
             if let Some(footer) = footer {
@@ -221,10 +223,10 @@ pub async fn edit_embed(
 
             if let Some(thumbnail) = thumbnail {
                 if thumbnail != "_" {
-                    embedb = embedb.thumbnail(thumbnail);
+                    embedb = embedb.thumbnail(thumbnail, None);
                 }
             } else if let Some(t) = &embed.thumbnail {
-                embedb = embedb.thumbnail(t.url.clone());
+                embedb = embedb.thumbnail(t.url.clone(), None);
             }
 
             let builder = EditMessage::default().embed(embedb);
@@ -258,7 +260,7 @@ pub async fn edit_embed(
             "This message is not an interaction!",
         )
         .await;
-    };
+    }
 
     Ok(())
 }
@@ -293,7 +295,9 @@ pub async fn add_repo(
     }
 
     {
-        let mut rwlock_guard = { ctx.data().state.write().unwrap() };
+        let data = ctx.data();
+        let mut rwlock_guard = data.state.write().unwrap();
+
         let details = RepositoryDetails {
             owner: owner.clone(),
             name: repository.clone(),
@@ -302,6 +306,7 @@ pub async fn add_repo(
         rwlock_guard
             .issue_prefixes
             .insert(key.clone().to_lowercase(), details);
+
         println!(
             "Successfully added repository {} for **{}/{}**",
             key.to_lowercase(),
@@ -346,7 +351,7 @@ pub async fn remove_repo(
             let content = format!("The key '{key}' does not exist.");
             respond_err(&ctx, title, &content).await;
         }
-    };
+    }
 
     Ok(())
 }
@@ -414,4 +419,15 @@ fn get_key_regex() -> &'static Regex {
 fn get_repo_details_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| Regex::new(r"^([a-zA-Z0-9-_.]+)*$").unwrap())
+}
+
+#[must_use]
+pub fn commands() -> [crate::Command; 5] {
+    [
+        embed(),
+        edit_embed(),
+        add_repo(),
+        remove_repo(),
+        list_repos(),
+    ]
 }

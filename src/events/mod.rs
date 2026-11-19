@@ -1,6 +1,6 @@
 use poise::serenity_prelude as serenity;
 
-use crate::Error;
+use crate::{Data, Error};
 
 pub mod code;
 pub mod issues;
@@ -19,6 +19,19 @@ pub async fn event_handler(
     event: &serenity::FullEvent,
 ) -> Result<(), Error> {
     match event {
+        serenity::FullEvent::Ready { data_about_bot, .. } => {
+            let data = ctx.data_ref::<Data>();
+            let shard_count = ctx.cache.shard_count();
+            let is_last_shard = (ctx.shard_id.0 + 1) == shard_count.get();
+
+            if is_last_shard
+                && !data
+                    .has_started
+                    .swap(true, std::sync::atomic::Ordering::SeqCst)
+            {
+                println!("Logged in as {}", data_about_bot.user.tag());
+            }
+        }
         serenity::FullEvent::Message { new_message, .. } => {
             if !new_message.author.bot() && new_message.guild_id.is_some() {
                 issues::message(ctx, new_message).await;

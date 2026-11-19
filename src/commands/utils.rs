@@ -1,9 +1,9 @@
 use std::sync::OnceLock;
 
 use crate::{
+    Context, Error,
     commands::{respond_embed, respond_err, respond_ok},
     structures::RepositoryDetails,
-    Context, Error,
 };
 
 use poise::serenity_prelude::{
@@ -260,7 +260,7 @@ pub async fn edit_embed(
             "This message is not an interaction!",
         )
         .await;
-    };
+    }
 
     Ok(())
 }
@@ -351,7 +351,7 @@ pub async fn remove_repo(
             let content = format!("The key '{key}' does not exist.");
             respond_err(&ctx, title, &content).await;
         }
-    };
+    }
 
     Ok(())
 }
@@ -423,5 +423,11 @@ fn get_repo_details_regex() -> &'static Regex {
 
 #[must_use]
 pub fn commands() -> [crate::Command; 5] {
-    [embed(), edit_embed(), add_repo(), remove_repo(), list_repos()]
+    [
+        embed(),
+        edit_embed(),
+        add_repo(),
+        remove_repo(),
+        list_repos(),
+    ]
 }

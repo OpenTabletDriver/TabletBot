@@ -73,7 +73,8 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 async fn main() {
     let _ = dotenvy::dotenv();
 
-    let discord_token = serenity::Token::from_env("DISCORD_TOKEN").expect("Expected discord api token");
+    let discord_token =
+        serenity::Token::from_env("DISCORD_TOKEN").expect("Expected discord api token");
     let github_token = env::var("GITHUB_TOKEN").expect("Expected github api token");
 
     let octo_builder = Octocrab::builder().personal_token(github_token);
@@ -87,7 +88,7 @@ async fn main() {
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("!".into()),
             edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
-                Duration::from_secs(600),
+                Duration::from_mins(10),
             ))),
             ..Default::default()
         },

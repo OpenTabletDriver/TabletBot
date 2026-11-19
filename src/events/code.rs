@@ -72,10 +72,10 @@ async fn http_get_body_text(url: &String) -> Option<String> {
 }
 
 fn try_parse<F: FromStr + Clone>(m: Option<Match>) -> Option<F> {
-    if let Some(m) = m {
-        if let Ok(f) = m.as_str().parse::<F>() {
-            return Some(f.to_owned());
-        }
+    if let Some(m) = m
+        && let Ok(f) = m.as_str().parse::<F>()
+    {
+        return Some(f.to_owned());
     }
 
     None
@@ -106,11 +106,7 @@ impl FileReference<'_> {
             })
             .collect();
 
-        if files.is_empty() {
-            None
-        } else {
-            Some(files)
-        }
+        if files.is_empty() { None } else { Some(files) }
     }
 
     pub async fn create_embed(&self) -> Option<CreateEmbed<'_>> {

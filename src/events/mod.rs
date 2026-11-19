@@ -10,7 +10,7 @@ pub struct Handler;
 #[serenity::async_trait]
 impl serenity::EventHandler for Handler {
     async fn dispatch(&self, ctx: &serenity::Context, event: &serenity::FullEvent) {
-        let _ = event_handler(&ctx, event).await;
+        let _ = event_handler(ctx, event).await;
     }
 }
 
@@ -19,7 +19,7 @@ pub async fn event_handler(
     event: &serenity::FullEvent,
 ) -> Result<(), Error> {
     match event {
-        serenity::FullEvent::Message { new_message , .. } => {
+        serenity::FullEvent::Message { new_message, .. } => {
             if !new_message.author.bot() && new_message.guild_id.is_some() {
                 issues::message(ctx, new_message).await;
                 code::message(ctx, new_message).await;

@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 
 use crate::{
+    Context, Error,
     commands::{respond_embed, respond_err, respond_ok},
     structures::{Embeddable, Snippet},
-    Context, Error,
 };
 use poise::serenity_prelude::{
     self as serenity, CreateAttachment, CreateEmbed, CreateInteractionResponse,
@@ -133,7 +133,7 @@ pub async fn edit_snippet(
             let content = &&format!("The snippet '{id_and_title}' does not exist");
             respond_err(&ctx, title, content).await;
         }
-    };
+    }
 
     Ok(())
 }
@@ -284,14 +284,13 @@ async fn remove_snippet_confirm(ctx: &Context<'_>, snippet: &Snippet) -> Result<
     let delete_id = format!("{ctx_id}cancel");
     let cancel_id = format!("{ctx_id}delete");
 
-    let components = serenity::CreateComponent::ActionRow(
-        serenity::CreateActionRow::Buttons(Cow::Owned(vec![
+    let components =
+        serenity::CreateComponent::ActionRow(serenity::CreateActionRow::Buttons(Cow::Owned(vec![
             serenity::CreateButton::new(&cancel_id).label("Cancel"),
             serenity::CreateButton::new(&delete_id)
                 .label("Delete")
                 .style(serenity::ButtonStyle::Danger),
-        ]))
-    );
+        ])));
 
     let builder: poise::CreateReply = poise::CreateReply::default()
         .content(format!(
@@ -304,11 +303,10 @@ async fn remove_snippet_confirm(ctx: &Context<'_>, snippet: &Snippet) -> Result<
 
     ctx.send(builder).await?;
 
-    while let Some(press) =
-        serenity::ComponentInteractionCollector::new(ctx.serenity_context())
-            .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
-            .timeout(std::time::Duration::from_secs(60))
-            .await
+    while let Some(press) = serenity::ComponentInteractionCollector::new(ctx.serenity_context())
+        .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+        .timeout(std::time::Duration::from_mins(1))
+        .await
     {
         if press.data.custom_id == delete_id {
             handle_delete(ctx, snippet, press).await?;
@@ -365,5 +363,12 @@ async fn handle_cancel(
 
 #[must_use]
 pub fn commands() -> [crate::Command; 6] {
-    [snippet(), create_snippet(), remove_snippet(), export_snippet(), list_snippets(), edit_snippet()]
+    [
+        snippet(),
+        create_snippet(),
+        remove_snippet(),
+        export_snippet(),
+        list_snippets(),
+        edit_snippet(),
+    ]
 }

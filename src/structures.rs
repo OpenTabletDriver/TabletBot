@@ -81,10 +81,10 @@ impl BotState {
 
         match writer {
             Ok(writer) => match to_writer_pretty(writer, self) {
-                Ok(()) => println!("Successfully saved state to '{path_str}'",),
+                Ok(()) => println!("Successfully saved state to '{path_str}'"),
                 Err(e) => println!("Failed to save state to '{path_str}': {e}"),
             },
             Err(e) => println!("Unable to write state to '{path_str}': {e}"),
-        };
+        }
     }
 }

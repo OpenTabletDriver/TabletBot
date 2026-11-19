@@ -1,6 +1,6 @@
 use std::{borrow::Cow, sync::OnceLock, time::Duration};
 
-use crate::{commands::interaction_err, structures::Embeddable, Data};
+use crate::{Data, commands::interaction_err, structures::Embeddable};
 
 use aformat::aformat;
 use octocrab::models::issues::Issue;
@@ -49,20 +49,19 @@ pub async fn message(ctx: &serenity::Context, message: &Message) {
     let remove_id = aformat!("{ctx_id}delete");
     let hide_body_id = aformat!("{ctx_id}hide_body");
 
-    let remove = serenity::CreateComponent::ActionRow(
-        CreateActionRow::Buttons(Cow::Owned(vec![CreateButton::new(&*remove_id)
-        .label("delete")
-        .style(ButtonStyle::Danger)]))
-    );
+    let remove = serenity::CreateComponent::ActionRow(CreateActionRow::Buttons(Cow::Owned(vec![
+        CreateButton::new(&*remove_id)
+            .label("delete")
+            .style(ButtonStyle::Danger),
+    ])));
 
-    let components = serenity::CreateComponent::ActionRow(
-        serenity::CreateActionRow::Buttons(Cow::Owned(vec![
+    let components =
+        serenity::CreateComponent::ActionRow(serenity::CreateActionRow::Buttons(Cow::Owned(vec![
             CreateButton::new(&*remove_id)
                 .label("delete")
                 .style(ButtonStyle::Danger),
             CreateButton::new(&*hide_body_id).label("hide body"),
-        ]))
-    );
+        ])));
 
     let content: serenity::CreateMessage = serenity::CreateMessage::default()
         .embeds(embeds)
@@ -75,7 +74,7 @@ pub async fn message(ctx: &serenity::Context, message: &Message) {
     let mut body_hid = false;
     while let Some(press) = serenity::ComponentInteractionCollector::new(ctx)
         .filter(move |press| press.data.custom_id.starts_with(&*ctx_id))
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_mins(1))
         .await
     {
         let has_perms = press.member.as_ref().is_some_and(|member| {
@@ -135,12 +134,10 @@ pub async fn message(ctx: &serenity::Context, message: &Message) {
     }
 
     // Triggers on timeout.
-    if !msg_deleted {
-        if let Ok(mut msg) = msg_result {
-            let _ = msg
-                .edit(ctx, serenity::EditMessage::default().components(vec![]))
-                .await;
-        }
+    if !msg_deleted && let Ok(mut msg) = msg_result {
+        let _ = msg
+            .edit(ctx, serenity::EditMessage::default().components(vec![]))
+            .await;
     }
 }
 
@@ -180,10 +177,10 @@ async fn issues(data: &Data, message: &Message) -> Option<Vec<Issue>> {
             }
         }
 
-        if ratelimit.rate.remaining >= 1 {
-            if let Ok(issue) = issues.get(issue_num).await {
-                collection.push(issue);
-            }
+        if ratelimit.rate.remaining >= 1
+            && let Ok(issue) = issues.get(issue_num).await
+        {
+            collection.push(issue);
         }
     }
 

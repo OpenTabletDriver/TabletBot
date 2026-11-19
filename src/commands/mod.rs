@@ -1,7 +1,7 @@
+pub mod meta;
 pub mod snippets;
 pub mod udev;
 pub mod utils;
-pub mod meta;
 
 pub(crate) const ACCENT_COLOUR: Colour = Colour(0x8957e5);
 pub(crate) const OK_COLOUR: Colour = Colour(0x2ecc71);
@@ -13,20 +13,21 @@ use to_arraystring::ToArrayString;
 
 use crate::{Context, Error};
 
+use poise::CreateReply;
 use poise::serenity_prelude::{
     self as serenity, Colour, ComponentInteraction, ComponentInteractionCollector, CreateActionRow,
     CreateButton, CreateEmbed, CreateEmbedFooter, CreateInteractionResponse,
     CreateInteractionResponseMessage,
 };
-use poise::CreateReply;
 
 #[must_use]
 pub fn commands() -> Vec<crate::Command> {
-    return meta::commands().into_iter()
+    meta::commands()
+        .into_iter()
         .chain(snippets::commands())
         .chain(utils::commands())
         .chain(udev::commands())
-        .collect();
+        .collect()
 }
 
 pub async fn respond_embed(ctx: &Context<'_>, embed: CreateEmbed<'_>, ephemeral: bool) {
@@ -101,12 +102,11 @@ pub async fn paginate_lists(
 
     let colour = Colour::TEAL;
 
-    let components = serenity::CreateComponent::ActionRow(
-        CreateActionRow::Buttons(Cow::Owned(vec![
+    let components =
+        serenity::CreateComponent::ActionRow(CreateActionRow::Buttons(Cow::Owned(vec![
             CreateButton::new(&*prev_button_id).emoji('◀'),
             CreateButton::new(&*next_button_id).emoji('▶'),
-        ]))
-    );
+        ])));
     let mut current_page = 0;
 
     // Don't paginate if its one page.
@@ -136,11 +136,10 @@ pub async fn paginate_lists(
     let msg = ctx.send(reply).await?;
 
     if pages.len() > 1 {
-        while let Some(press) =
-            ComponentInteractionCollector::new(ctx.serenity_context())
-                .filter(move |press| press.data.custom_id.starts_with(ctx_id.as_str()))
-                .timeout(std::time::Duration::from_secs(180))
-                .await
+        while let Some(press) = ComponentInteractionCollector::new(ctx.serenity_context())
+            .filter(move |press| press.data.custom_id.starts_with(ctx_id.as_str()))
+            .timeout(std::time::Duration::from_mins(3))
+            .await
         {
             match Kind::from_id(&press.data.custom_id, &ctx_id) {
                 Some(Kind::Next) => {

@@ -1,14 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{from_reader, to_writer_pretty};
 use serenity::builder::CreateEmbed;
-use serenity::prelude::TypeMapKey;
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::path::Path;
 
 pub trait Embeddable {
-    fn embed(&self) -> CreateEmbed;
+    fn embed(&self) -> CreateEmbed<'_>;
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -28,10 +27,6 @@ impl Snippet {
 pub struct BotState {
     pub snippets: Vec<Snippet>,
     pub issue_prefixes: HashMap<String, RepositoryDetails>,
-}
-
-impl TypeMapKey for BotState {
-    type Value = BotState;
 }
 
 #[derive(Deserialize, Clone, Serialize, Default)]

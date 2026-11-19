@@ -3,6 +3,7 @@
 , pkg-config
 , openssl
 , fetchurl
+, aws-lc
 , ...
 }:
 
@@ -16,6 +17,7 @@ rustPlatform.buildRustPackage rec {
 
   buildInputs = [
     openssl
+    aws-lc
   ];
 
   src = ./.;

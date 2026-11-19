@@ -28,7 +28,7 @@ pub struct Data {
 }
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
-type FrameworkContext<'a> = poise::FrameworkContext<'a, Data, Error>;
+type Command = poise::Command<Data, Error>;
 
 async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
     match error {
@@ -83,21 +83,7 @@ async fn main() {
     let state = RwLock::new(BotState::read());
 
     let options = poise::FrameworkOptions {
-        commands: vec![
-            commands::register(),
-            commands::snippets::snippet(),
-            commands::snippets::create_snippet(),
-            commands::snippets::remove_snippet(),
-            commands::snippets::export_snippet(),
-            commands::snippets::list_snippets(),
-            commands::snippets::edit_snippet(),
-            commands::utils::embed(),
-            commands::utils::edit_embed(),
-            commands::utils::add_repo(),
-            commands::utils::remove_repo(),
-            commands::utils::list_repos(),
-            commands::udev::generate_udev(),
-        ],
+        commands: commands::commands(),
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("!".into()),
             edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
@@ -114,7 +100,6 @@ async fn main() {
         },
 
         skip_checks_for_owners: false,
-        event_handler: |framework, event| Box::pin(events::event_handler(framework, event)),
         ..Default::default()
     };
 
@@ -131,6 +116,7 @@ async fn main() {
         | GatewayIntents::MESSAGE_CONTENT;
 
     let mut client = serenity::Client::builder(discord_token, intents)
+        .event_handler(Arc::new(events::Handler))
         .framework(Box::new(framework))
         .data(Arc::new(data))
         .await

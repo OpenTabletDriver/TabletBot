@@ -362,3 +362,8 @@ async fn handle_cancel(
         .await?;
     Ok(())
 }
+
+#[must_use]
+pub fn commands() -> [crate::Command; 6] {
+    [snippet(), create_snippet(), remove_snippet(), export_snippet(), list_snippets(), edit_snippet()]
+}

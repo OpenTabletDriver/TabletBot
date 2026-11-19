@@ -8,13 +8,11 @@ use std::sync::Arc;
 
 use crate::formatting::trim_indent;
 
-use crate::FrameworkContext;
-
 // A shade of purple.
 const ACCENT_COLOUR: Colour = Colour::new(0x8957e5);
 
-pub async fn message(framework: FrameworkContext<'_>, message: &Message) {
-    let http = &framework.serenity_context.http.clone();
+pub async fn message(ctx: &serenity::Context, message: &Message) {
+    let http = &ctx.http.clone();
 
     let Some(file_refs) = get_file_refs(http.clone(), message) else {
         return;
@@ -93,7 +91,7 @@ struct FileReference<'a> {
 }
 
 impl FileReference<'_> {
-    pub fn try_from_str(text: &str) -> Option<Vec<FileReference>> {
+    pub fn try_from_str(text: &str) -> Option<Vec<FileReference<'_>>> {
         let r = get_file_reference_regex();
 
         let files: Vec<FileReference> = r
@@ -115,7 +113,7 @@ impl FileReference<'_> {
         }
     }
 
-    pub async fn create_embed(&self) -> Option<CreateEmbed> {
+    pub async fn create_embed(&self) -> Option<CreateEmbed<'_>> {
         let extension = self.get_extension();
 
         if let Some(mut content) = self.display().await {

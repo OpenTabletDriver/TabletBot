@@ -1,6 +1,7 @@
 pub mod snippets;
 pub mod udev;
 pub mod utils;
+pub mod meta;
 
 pub(crate) const ACCENT_COLOUR: Colour = Colour(0x8957e5);
 pub(crate) const OK_COLOUR: Colour = Colour(0x2ecc71);
@@ -19,11 +20,13 @@ use poise::serenity_prelude::{
 };
 use poise::CreateReply;
 
-#[poise::command(prefix_command, hide_in_help)]
-pub async fn register(ctx: Context<'_>) -> Result<(), Error> {
-    poise::builtins::register_application_commands_buttons(ctx).await?;
-
-    Ok(())
+#[must_use]
+pub fn commands() -> Vec<crate::Command> {
+    return meta::commands().into_iter()
+        .chain(snippets::commands())
+        .chain(utils::commands())
+        .chain(udev::commands())
+        .collect();
 }
 
 pub async fn respond_embed(ctx: &Context<'_>, embed: CreateEmbed<'_>, ephemeral: bool) {

@@ -420,3 +420,8 @@ fn get_repo_details_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| Regex::new(r"^([a-zA-Z0-9-_.]+)*$").unwrap())
 }
+
+#[must_use]
+pub fn commands() -> [crate::Command; 5] {
+    [embed(), edit_embed(), add_repo(), remove_repo(), list_repos()]
+}

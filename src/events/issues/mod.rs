@@ -1,6 +1,6 @@
 use std::{borrow::Cow, sync::OnceLock, time::Duration};
 
-use crate::{commands::interaction_err, structures::Embeddable, Data, FrameworkContext};
+use crate::{commands::interaction_err, structures::Embeddable, Data};
 
 use aformat::aformat;
 use octocrab::models::issues::Issue;
@@ -33,9 +33,8 @@ impl Kind {
     }
 }
 
-pub async fn message(framework: FrameworkContext<'_>, message: &Message) {
-    let data = framework.user_data();
-    let ctx = framework.serenity_context;
+pub async fn message(ctx: &serenity::Context, message: &Message) {
+    let data = ctx.data();
 
     let issues = issues(&data, message).await;
 
